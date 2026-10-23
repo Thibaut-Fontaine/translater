@@ -1,0 +1,31 @@
+# syntax=docker/dockerfile:1
+#
+# Build and test environment. Reproduces the CI run on any host without
+# touching the machine's toolchain.
+#
+#   docker build -f docker/Dockerfile.dev -t xtrans-dev .
+#   docker run --rm xtrans-dev
+#
+# The tests run during the build, so a broken image tag is never produced.
+FROM debian:bookworm-slim
+
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      build-essential \
+      ca-certificates \
+      cmake \
+      g++-aarch64-linux-gnu \
+      gcc-aarch64-linux-gnu \
+      libc6-dev-arm64-cross \
+      ninja-build \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+COPY . .
+
+RUN cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+ && cmake --build build -j"$(nproc)" \
+ && ctest --test-dir build --output-on-failure
+
+CMD ["sh", "-c", "cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug && cmake --build build -j\"$(nproc)\" && ctest --test-dir build --output-on-failure"]

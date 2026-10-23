@@ -61,8 +61,11 @@ Do not assume a screen, keyboard, GPU compute, or network on the device.
 ```
 include/xtrans/    public headers, one subsystem per header
 src/               implementation, mirrors include/xtrans/
+apps/              daemon binaries, wiring only
 tests/             unit tests + minimal harness, no external test framework
 cmake/             toolchain files, packaging helpers
+docker/            dev/test image, runtime image, compose stack
+scripts/           shell front-ends, each with a --self-test mode
 docs/              design notes that are not code
 third_party/       pinned vendored sources (never edited in place)
 ```
@@ -194,6 +197,7 @@ adapters            ALSA, libgpiod, whisper.cpp, ONNX Runtime, Piper
 | Piper | TTS | one ONNX voice per validated language |
 | ALSA (`libasound2`) | capture/playback | system package |
 | libgpiod | buttons | system package |
+| Docker | dev/test + device images | `debian:bookworm-slim`, never `latest` |
 
 - Pin versions; record the digest in `third_party/README.md` when adding one.
 - No CMake `FetchContent` at build time on the device; provisioning is a
@@ -207,6 +211,12 @@ adapters            ALSA, libgpiod, whisper.cpp, ONNX Runtime, Piper
 
 - `xtransd.service` runs as user `xtrans`, `Restart=on-failure`, `Nice=-5`,
   `IOSchedulingClass=realtime`; no root at runtime.
+- Container deployment is supported as an alternative: cross-built arm64 image
+  (`docker/Dockerfile`), rootless uid 10001, read-only rootfs, `network_mode:
+  none`, models mounted read-only from `/opt/xtrans/models`, `/dev/snd` and
+  `/dev/gpiochip0` passed through. See `docs/docker.md`. The two deployment
+  paths must stay feature-equivalent; never ship a container that needs the
+  network to start.
 - Buttons come from `/dev/gpiochip*` via the `gpio` group.
 - Audio via ALSA `default` device; the config file is generated at provisioning,
   not committed with machine-specific card indices.
