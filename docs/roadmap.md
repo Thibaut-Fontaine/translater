@@ -145,10 +145,12 @@ speech). French not yet measured; device latency not yet measured.
   a 15 s float buffer allocated once at `open()`, matching the recorder's cap.
 - **Measured latency is not the budget yet.** `jfk.wav` (11 s, English, base
   model, 4 threads) takes ~22 s wall on this x86 host: far outside real time.
-  `whisper_full` always processes a 30 s window, so a 3 s utterance will not be
-  6× cheaper. This needs a Pi 5 measurement before the 700 ms budget can be
-  believed — likely with a quantized model (`q5_1`) and possibly `base.en` for
-  English-only turns. Decision deferred to M6, with numbers, not guesses.
+  A 3 s clip costs the same ~21 s, confirming that `whisper_full` always
+  processes a 30 s window. q5_1 was *slower* here (55 s), a host artefact with
+  no optimized quantized dot product. Numbers and caveats are in
+  `docs/measurements.md`. The 700 ms budget needs a Pi 5 measurement before it
+  is kept or changed; model choice (`base`, `base.en`, `tiny`) is a decision
+  for the owner, not a guess to bury in code.
 
 Privacy held: the daemon logs `stt status=N chars=M`, never the transcript.
 
