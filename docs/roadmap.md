@@ -343,8 +343,19 @@ returned null and the first ORT call segfaulted. The loader now tries
 `.so.1`, `.so.1.21` and `.so`, and the runtime image adds the stable
 `.so.1` symlink.
 
-Remaining for M7: the image builder (partition injection + Docker install +
-verification) and the pinned Raspberry Pi OS base.
+Remaining for M7: the image builder works up to loop-device access and then
+fails in this environment. `losetup -fP` does not create partition nodes in the
+Docker Desktop VM, and `kpartx` mapping is unstable (repeated runs leave
+`/dev/loopN` "lost"). The builder (`scripts/build_image.sh`,
+`docker/image/provision.sh`, `verify.sh`) is written, pinned to Raspberry Pi OS
+Lite 2026-10-06 and static Docker 29.9.2 (both SHA-256 pinned), and needs either:
+
+- a host with working loop devices (`sudo` on a normal Linux box), or
+- an offset-based rewrite (dd partition slices out, `e2fsck`/`resize2fs`/
+  `debugfs` on files, dd back), which needs ~8 GB of scratch space.
+
+Neither is available here right now: 185 GB disk is 99% full (9 GB free) and the
+VM kernel does not expose loop partitions.
 
 
 **Todo, with feasibility**
