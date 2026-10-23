@@ -1,0 +1,16 @@
+[Unit]
+Description=Docker Engine
+After=containerd.service
+Requires=containerd.service
+
+[Service]
+# Offline device: no bridge, no iptables. The translator container uses
+# network_mode: none, so Docker must not touch the firewall.
+ExecStart=/usr/local/bin/dockerd --containerd=/run/containerd/containerd.sock \
+    --iptables=false --ip6tables=false --bridge=none
+Restart=always
+RestartSec=5
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target

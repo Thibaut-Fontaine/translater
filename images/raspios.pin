@@ -1,0 +1,7 @@
+# Raspberry Pi OS Lite 64-bit (Debian trixie), verified 2026-10-06 release.
+base_url https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2026-10-06/2026-10-06-raspios-trixie-arm64-lite.img.xz
+base_sha256 483db18a48da399b5b7022ffae9a07bc6d99daab30e593aedac09b69ff422843
+# Docker Engine static binaries for arm64 (no apt, no chroot).
+docker_version 29.9.2
+docker_url https://download.docker.com/linux/static/stable/aarch64/docker-29.9.2.tgz
+docker_sha256 873b3e0207857c3b2f28392fb922f3ea6efe37620c16d4d4aaf2fef409c90b73
