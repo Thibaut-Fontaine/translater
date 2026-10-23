@@ -103,18 +103,29 @@ else()
 endif()
 
 if(XTRANS_WITH_NLLB)
-  target_sources(xtrans PRIVATE src/adapters/nllb.cpp src/adapters/ort_delay_load.cpp)
+  target_sources(xtrans PRIVATE src/adapters/nllb.cpp)
   target_include_directories(xtrans PRIVATE "${XTRANS_ORT_INCLUDE_DIR}")
   target_link_libraries(xtrans PUBLIC "${XTRANS_SENTENCEPIECE_LIBRARY}" ${CMAKE_DL_LIBS})
   target_compile_definitions(xtrans PUBLIC XTRANS_WITH_NLLB=1)
   # ONNX Runtime's C++ API throws. This is the only place exceptions are
   # enabled; the adapter catches at its boundary and returns MtStatus.
-  set_source_files_properties(src/adapters/nllb.cpp src/adapters/ort_delay_load.cpp
-    PROPERTIES COMPILE_OPTIONS "-fexceptions")
+  set_source_files_properties(src/adapters/nllb.cpp PROPERTIES COMPILE_OPTIONS "-fexceptions")
   message(STATUS "NLLB adapter: enabled (ONNX Runtime from ${XTRANS_ORT_INCLUDE_DIR})")
 else()
   target_compile_definitions(xtrans PUBLIC XTRANS_WITH_NLLB=0)
   message(STATUS "NLLB adapter: disabled (libonnxruntime-dev / libsentencepiece-dev not found)")
+endif()
+
+# Anything that uses ONNX Runtime headers must go through our delay loader.
+# The ORT loader must be an object file in every executable: a static archive
+# is scanned before libpiper.so asks for OrtGetApiBase, so the symbol would
+# stay undefined at link time.
+if(XTRANS_WITH_NLLB OR XTRANS_WITH_PIPER)
+  add_library(xtrans_ort_loader OBJECT src/adapters/ort_delay_load.cpp)
+  target_include_directories(xtrans_ort_loader PRIVATE "${XTRANS_ORT_INCLUDE_DIR}")
+  set_target_properties(xtrans_ort_loader PROPERTIES
+    COMPILE_OPTIONS "-fexceptions")
+  add_library(xtrans::ort_loader ALIAS xtrans_ort_loader)
 endif()
 
 set(XTRANS_PIPER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/piper")
@@ -185,14 +196,23 @@ enable_testing()
 
 add_executable(xtransd apps/xtransd.cpp)
 target_link_libraries(xtransd PRIVATE xtrans)
+if(TARGET xtrans_ort_loader)
+  target_sources(xtransd PRIVATE $<TARGET_OBJECTS:xtrans_ort_loader>)
+endif()
 install(TARGETS xtransd RUNTIME DESTINATION bin)
 
 add_executable(xtrans-mt apps/xtrans-mt.cpp)
 target_link_libraries(xtrans-mt PRIVATE xtrans)
+if(TARGET xtrans_ort_loader)
+  target_sources(xtrans-mt PRIVATE $<TARGET_OBJECTS:xtrans_ort_loader>)
+endif()
 install(TARGETS xtrans-mt RUNTIME DESTINATION bin)
 
 add_executable(xtrans-tts apps/xtrans-tts.cpp)
 target_link_libraries(xtrans-tts PRIVATE xtrans)
+if(TARGET xtrans_ort_loader)
+  target_sources(xtrans-tts PRIVATE $<TARGET_OBJECTS:xtrans_ort_loader>)
+endif()
 install(TARGETS xtrans-tts RUNTIME DESTINATION bin)
 
 option(XTRANS_BUILD_TESTS "Build the unit tests (host only)" ON)
@@ -211,6 +231,7 @@ if(XTRANS_BUILD_TESTS)
     tests/test_recorder.cpp
     tests/test_text.cpp
     tests/test_wav.cpp
+    tests/test_watchdog.cpp
   )
   target_link_libraries(xtrans_tests PRIVATE xtrans)
 

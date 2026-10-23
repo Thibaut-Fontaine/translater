@@ -302,6 +302,30 @@ one rate; and voices are warmed in `open()` because the first call costs ~9.6 s
 
 **Acceptance:** `--selftest` passes on the x86 dev container with the real
 models, and produces two WAV files whose duration is plausible.
+**Met.** In the trixie image: French prompt synthesised (29 535 samples) →
+transcribed (29 chars) → translated (16 chars) → English speech (19 133
+samples); both WAVs written. 102 tests green.
+
+**Reflection:** the selftest paid for itself immediately by exposing a crash no
+unit test could reach.
+
+1. **Piper links ONNX Runtime directly.** That pulls ORT's bundled protobuf
+   into the global namespace at startup, and libsentencepiece's descriptor
+   registration segfaults *before* `main` (`ReflectionOps::FindInitializationErrors`
+   inside `DescriptorPool::InternalAddGeneratedFile`). The delay-load design
+   only works if nothing links ORT, so the CMake shim is now an **interface**
+   target (headers only) and piper's CLI subdirectory is skipped
+   (`piper-no-cli.patch`). Every executable gets the loader object.
+2. **Static archives are scanned before shared libraries.** Keeping
+   `ort_delay_load.cpp` inside `libxtrans.a` left `OrtGetApiBase` undefined
+   when `libpiper.so` asked for it. The loader is an OBJECT library added to
+   each executable now — link order, not code, was the bug.
+3. **Timeouts are state-machine only.** The watchdog catches a stage that
+   never reports; a native call that blocks forever still needs the process
+   supervisor (`Restart=on-failure`, M9 adds `WatchdogSec`). That limitation
+   is written down rather than hidden.
+4. Barge-in is chunked playback (100 ms) with a `Device::tick()` between
+   chunks; it stops speech on a new press. Untested on hardware.
 
 ---
 

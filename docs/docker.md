@@ -76,14 +76,16 @@ require rebuilding the container.
 Layout the daemon expects:
 
 ```
-/opt/xtrans/models/
-  ggml-base.bin                      # whisper (STT)
-  nllb/encoder_model_int8.onnx       # NLLB (MT), pinned in models/nllb.pin
-  nllb/decoder_model_quantized.onnx
-  nllb/decoder_with_past_model_quantized.onnx
-  nllb/sentencepiece.bpe.model
-  voices/fr_FR-siwis-medium.onnx     # Piper (TTS), M5
-  voices/en_US-lessac-medium.onnx
+/opt/xtrans/
+  espeak-ng-data/                    # phonemizer data (Piper), from the build
+  models/
+    ggml-base.bin                    # whisper (STT)
+    nllb/encoder_model_int8.onnx     # NLLB (MT), pinned in models/nllb.pin
+    nllb/decoder_model_quantized.onnx
+    nllb/decoder_with_past_model_quantized.onnx
+    nllb/sentencepiece.bpe.model
+    voices/fr_FR-siwis-medium.onnx   # Piper (TTS)
+    voices/en_US-lessac-medium.onnx
 ```
 
 ### Device access
