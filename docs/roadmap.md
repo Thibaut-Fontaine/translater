@@ -66,25 +66,47 @@ shows up in the sampling loop.
 
 ---
 
-## M2 — OS adapters: ALSA capture/playback and GPIO buttons
+## M2 — OS adapters: ALSA capture/playback and GPIO buttons (compile-verified)
 
 **Goal:** the same `Device` driving real hardware interfaces, compiled in the
 dev image (which carries `libasound2-dev` and `libgpiod-dev`).
 
 **Todo**
 
-- [ ] `AlsaIn` / `AlsaOut`: 16 kHz mono S16_LE, non-blocking capture thread into
+- [x] `AlsaIn` / `AlsaOut`: 16 kHz mono S16_LE, non-blocking capture thread into
       the existing SPSC ring, blocking playback with underrun counting.
-- [ ] `GpiodButtons`: three lines, active-low with pull-ups, edge polling,
+- [x] `GpiodButtons`: three lines, active-low with pull-ups, edge polling,
       debounce delegated to `Debouncer` (no logic in the adapter).
-- [ ] CMake: `XTRANS_WITH_ALSA`, `XTRANS_WITH_GPIOD` (auto-detect, OFF if the
+- [x] CMake: `XTRANS_WITH_ALSA`, `XTRANS_WITH_GPIOD` (auto-detect, OFF if the
       headers are absent), so host tests stay dependency-free.
-- [ ] Dev image installs the two `-dev` packages; a `--fake` mode keeps the
-      container runnable without devices.
-- [ ] Device-side smoke script: record 2 s, measure RMS, play back a tone.
+- [x] Dev image installs the two `-dev` packages; `--device` mode in the daemon.
+- [~] Device-side smoke script (record 2 s, RMS, tone): moved to M6, where the
+      container and the Pi exist; `--device` already fails loudly (exit 3) when
+      there is no audio hardware.
 
 **Acceptance:** adapters compile in the dev image with warnings-as-errors; the
 smoke script runs on the Pi; no project logic inside adapters.
+**Met (compile side):** `scripts/docker.sh test` builds ALSA + libgpiod adapters
+with `-Werror` and the full suite passes inside the image; `scripts/docker.sh
+smoke` asserts the adapters were built and that `--device` exits 3 without a
+sound device.
+
+**Reflection:** building in the dev image, not just on the host, immediately
+paid for itself. Two defects existed only in that configuration:
+
+- `#if defined(GPIOD_LINE_REQUEST_FLAG_BIAS_PULL_UP)` is **always false** —
+  libgpiod's flags are enum constants, not macros. The pull-up would have been
+  silently disabled and the buttons would float on real hardware. No host test
+  could have seen this; only compiling against the real header did.
+- `gpiod_line_request_input_flags` takes an `int`, not an `unsigned long`;
+  `-Wconversion` + `-Werror` caught the narrowing.
+
+Lesson recorded in the code: no `#if defined()` on enum constants, libgpiod
+>= 1.6 is required, and adapters must be compiled in the image on every build.
+
+Still unverified: actual ALSA/GPIO I/O, which no test environment here can
+exercise. `AudioOut` is implemented but unused until Piper (M5). The daemon's
+device mode is record-only and aborts the pipeline after each turn until M3.
 
 **Blocked by:** Docker access on the workstation (build verification).
 

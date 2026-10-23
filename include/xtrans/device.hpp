@@ -22,6 +22,7 @@ class Device {
   bool tick() noexcept;
 
   const Controller& controller() const noexcept { return controller_; }
+  Controller& controller() noexcept { return controller_; }
   bool recording() const noexcept { return recorder_.active(); }
 
   // Samples of the last finished turn; empty when it was discarded.
