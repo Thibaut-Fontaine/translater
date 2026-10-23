@@ -1,0 +1,10 @@
+# Piper voices (see docs/languages.md for what each language can do).
+# Fetched and verified by scripts/fetch_models.sh.
+repo rhasspy/piper-voices
+base https://huggingface.co/rhasspy/piper-voices/resolve/main
+file fr_FR-siwis-medium.onnx fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx 641d1ab097da2b81128c076810edb052b385decc8be3381814802a64a73baf99
+file fr_FR-siwis-medium.onnx.json fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx.json 39479916c2db192b5ac9764daddd0c744d83e023ad890c6976c0633ae4df8959
+file en_US-lessac-medium.onnx en/en_US/lessac/medium/en_US-lessac-medium.onnx 5efe09e69902187827af646e1a6e9d269dee769f9877d17b16b1b46eeaaf019f
+file en_US-lessac-medium.onnx.json en/en_US/lessac/medium/en_US-lessac-medium.onnx.json efe19c417bed055f2d69908248c6ba650fa135bc868b0e6abb3da181dab690a0
+file th_TH-tsync2-medium.onnx th/th_TH/tsync2/medium/th_TH-tsync2-medium.onnx 136669378ee72dd27012604994099ca3c833e625c7cfdff05ccdf468a1a2115f
+file th_TH-tsync2-medium.onnx.json th/th_TH/tsync2/medium/th_TH-tsync2-medium.onnx.json 212aff35b8beed828a5f2af33b3cfc7744f4fac3c3dc7e6a2f464692e8257bb7
