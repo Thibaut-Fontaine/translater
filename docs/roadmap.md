@@ -366,6 +366,27 @@ verification happens in M9.
 
 **Acceptance:** loopback test suite green; checksum mismatch is detected and
 reported; no code path writes without an explicit `--device`.
+**Met for the policy:** 7 new tests cover every refusal; on this workstation the
+tool refuses the fixed disk (`not removable`, exit 3) and a path instead of a
+bare name (exit 2). The write and read-back paths are code-complete but only
+executable with real hardware (M9).
+
+**Reflection:** the useful design decision was to make the safety policy a
+**pure function** (`assess_target`) over an injected `BlockDevice`. Every
+refusal — fixed disk, mounted, too small — is a table test, not a mock of a
+syscall. The I/O is deliberately dumb: 1 MB chunks, `O_SYNC`, `fsync`, then a
+byte-for-byte read-back; no checksum library, no cleverness.
+
+Honest gaps:
+
+- there is a **race** between the mount check and the first write (a filesystem
+  could be mounted in between). `O_EXCL` does not protect block devices; the
+  fix is a lock or a udev-level check, and it matters more for a tool that
+  might be handed to someone else than for the owner flashing their own card;
+- `device_mounted()` matches the device name as a substring of `/proc/mounts`,
+  which is right for `sdb`/`sdb1` but could in principle match a path that
+  merely contains the name;
+- the progress output and the read-back loop are untested until hardware.
 
 ---
 
