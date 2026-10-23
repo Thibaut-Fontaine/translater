@@ -1,0 +1,22 @@
+# Models and build artifacts (downloaded on the device, not in git)
+models/
+*.bin
+*.gguf
+*.onnx
+*.onnx.json
+
+# Audio captures and test output
+recordings/
+*.wav
+*.raw
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
