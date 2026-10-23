@@ -181,7 +181,11 @@ Privacy held: the daemon logs `stt status=N chars=M`, never the transcript.
       model in unit tests.
 - [ ] Benchmark: fr→en and en→fr latency, RSS.
 
-**Status:** blocked on model quality. The delay-load fix for the ORT /
+**Status:** unblocked. The published export is correct; our token ids needed
+the NLLB offset (`sp_id + 1`) and a trailing EOS, verified in both directions
+against transformers.js. See `docs/nllb-onnx.md`.
+
+**Previous status:** blocked on model quality. The delay-load fix for the ORT /
 sentencepiece protobuf clash works, the `Mt` port and pair gate are in, and the
 language ids are known. The published ONNX export produces degenerate output
 even in reference Python, so no adapter can be validated against it. Findings,
