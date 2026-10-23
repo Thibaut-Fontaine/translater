@@ -7,7 +7,7 @@
 #   docker run --rm xtrans-dev
 #
 # The tests run during the build, so a broken image tag is never produced.
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
@@ -20,6 +20,8 @@ RUN apt-get update \
       libasound2-dev \
       libc6-dev-arm64-cross \
       libgpiod-dev \
+      libonnxruntime-dev \
+      libsentencepiece-dev \
       ninja-build \
  && rm -rf /var/lib/apt/lists/*
 
