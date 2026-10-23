@@ -77,3 +77,31 @@ TEST_CASE(test_buttons_configurable_stability) {
   const Presses presses = debouncer.feed(only_ptt(true));
   CHECK_EQ(presses.count, 1);
 }
+
+TEST_CASE(test_buttons_active_low_levels_are_inverted) {
+  const ButtonState idle = decode_levels(1, 1, 1, true);
+  CHECK(!idle.lang_a);
+  CHECK(!idle.lang_b);
+  CHECK(!idle.ptt);
+
+  const ButtonState pressed = decode_levels(0, 0, 0, true);
+  CHECK(pressed.lang_a);
+  CHECK(pressed.lang_b);
+  CHECK(pressed.ptt);
+}
+
+TEST_CASE(test_buttons_active_high_levels_are_not_inverted) {
+  const ButtonState pressed = decode_levels(1, 0, 1, false);
+  CHECK(pressed.lang_a);
+  CHECK(!pressed.lang_b);
+  CHECK(pressed.ptt);
+}
+
+TEST_CASE(test_buttons_decode_treats_errors_as_released) {
+  // gpiod returns -1 on a failed read; a stuck-low line must never look pressed
+  // forever, which would wedge a turn in recording.
+  const ButtonState state = decode_levels(-1, 1, 1, true);
+  CHECK(!state.lang_a);
+  CHECK(!state.lang_b);
+  CHECK(!state.ptt);
+}

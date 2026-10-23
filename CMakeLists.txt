@@ -23,6 +23,29 @@ if(XTRANS_WERROR)
   list(APPEND XTRANS_CXX_WARNINGS -Werror)
 endif()
 
+# Optional OS adapters. Found -> built by default; missing headers keep the host
+# test build dependency-free.
+find_path(XTRANS_ALSA_INCLUDE_DIR alsa/asoundlib.h)
+find_library(XTRANS_ALSA_LIBRARY asound)
+find_path(XTRANS_GPIOD_INCLUDE_DIR gpiod.h)
+find_library(XTRANS_GPIOD_LIBRARY gpiod)
+find_package(Threads REQUIRED)
+
+if(XTRANS_ALSA_INCLUDE_DIR AND XTRANS_ALSA_LIBRARY)
+  set(XTRANS_ALSA_DEFAULT ON)
+else()
+  set(XTRANS_ALSA_DEFAULT OFF)
+endif()
+if(XTRANS_GPIOD_INCLUDE_DIR AND XTRANS_GPIOD_LIBRARY)
+  set(XTRANS_GPIOD_DEFAULT ON)
+else()
+  set(XTRANS_GPIOD_DEFAULT OFF)
+endif()
+
+option(XTRANS_WITH_ALSA "Build the ALSA capture/playback adapters" ${XTRANS_ALSA_DEFAULT})
+option(XTRANS_WITH_GPIOD "Build the libgpiod button adapter" ${XTRANS_GPIOD_DEFAULT})
+
+
 add_library(xtrans STATIC
   src/audio.cpp
   src/buttons.cpp
@@ -40,6 +63,28 @@ target_compile_options(xtrans PUBLIC
   -fno-rtti
   "$<$<CONFIG:Release>:-O3>"
 )
+
+if(XTRANS_WITH_ALSA)
+  target_sources(xtrans PRIVATE src/adapters/alsa.cpp)
+  target_include_directories(xtrans PRIVATE "${XTRANS_ALSA_INCLUDE_DIR}")
+  target_link_libraries(xtrans PUBLIC "${XTRANS_ALSA_LIBRARY}" Threads::Threads)
+  target_compile_definitions(xtrans PUBLIC XTRANS_WITH_ALSA=1)
+  message(STATUS "ALSA adapters: ${XTRANS_ALSA_LIBRARY}")
+else()
+  target_compile_definitions(xtrans PUBLIC XTRANS_WITH_ALSA=0)
+  message(STATUS "ALSA adapters: disabled (libasound2-dev not found)")
+endif()
+
+if(XTRANS_WITH_GPIOD)
+  target_sources(xtrans PRIVATE src/adapters/gpiod.cpp)
+  target_include_directories(xtrans PRIVATE "${XTRANS_GPIOD_INCLUDE_DIR}")
+  target_link_libraries(xtrans PUBLIC "${XTRANS_GPIOD_LIBRARY}")
+  target_compile_definitions(xtrans PUBLIC XTRANS_WITH_GPIOD=1)
+  message(STATUS "GPIO adapter: ${XTRANS_GPIOD_LIBRARY}")
+else()
+  target_compile_definitions(xtrans PUBLIC XTRANS_WITH_GPIOD=0)
+  message(STATUS "GPIO adapter: disabled (libgpiod-dev not found)")
+endif()
 
 # LTO only for optimised builds; debugging must stay fast to link.
 set_property(TARGET xtrans PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)

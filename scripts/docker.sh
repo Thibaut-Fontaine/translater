@@ -55,8 +55,17 @@ cmd_smoke() {
   require_docker
   docker run --rm -i "$DEV_IMAGE" sh -c '
     set -e
-    cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug >/dev/null
+    cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
     cmake --build build -j"$(nproc)" >/dev/null
+    grep -q "XTRANS_WITH_ALSA:BOOL=ON" build/CMakeCache.txt || {
+      echo "ALSA adapter was not built in the dev image" >&2; exit 1; }
+    grep -q "XTRANS_WITH_GPIOD:BOOL=ON" build/CMakeCache.txt || {
+      echo "GPIO adapter was not built in the dev image" >&2; exit 1; }
+    rc=0
+    ./build/xtransd --device >/dev/null 2>&1 || rc=$?
+    if [ "$rc" != 3 ]; then
+      echo "expected exit 3 without audio hardware, got $rc" >&2; exit 1
+    fi
     exec ./build/xtransd' <<'EOF'
 press
 release

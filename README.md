@@ -32,9 +32,12 @@ Implemented and tested so far:
 - turn engine (`include/xtrans/device.hpp`): button debounce, capture buffer,
   gate endpointing, silence-turn discard, max-duration cut — tested against
   fake buttons and fake audio
+- ALSA capture/playback and libgpiod buttons (`include/xtrans/adapters/`),
+  compiled with `-Werror` in the dev image; `xtransd --device` runs them,
+  `--stdin` stays the default
 
-Not implemented yet: ALSA capture/playback, GPIO buttons, the whisper.cpp,
-NLLB and Piper adapters, and the systemd unit. See
+Not implemented yet: the whisper.cpp, NLLB and Piper adapters, and the systemd
+unit. Hardware I/O is compile-verified but not yet exercised on a Pi. See
 [docs/roadmap.md](docs/roadmap.md) for the milestone order.
 
 ## Build and test

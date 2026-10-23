@@ -59,4 +59,16 @@ class ButtonSource {
   virtual bool poll(ButtonState& out) noexcept = 0;
 };
 
+// Maps raw line levels (0 or 1, negative means a failed read) to button states.
+// Negative levels count as released: a broken line must never look pressed,
+// otherwise a turn would stay in recording forever.
+constexpr ButtonState decode_levels(int lang_a, int lang_b, int ptt,
+                                    bool active_low) noexcept {
+  const auto pressed = [active_low](int level) constexpr noexcept {
+    if (level < 0) return false;
+    return active_low ? level == 0 : level != 0;
+  };
+  return ButtonState{pressed(lang_a), pressed(lang_b), pressed(ptt)};
+}
+
 }  // namespace xtrans
