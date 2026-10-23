@@ -219,97 +219,134 @@ loaded once; unsupported pair returns an explicit status instead of garbage.
 
 ---
 
-## M5 — TTS: Piper
+## Phases
 
-**Todo**
+- **Phase 1 — no hardware required.** Everything that can be built and exercised
+  on this workstation or in the dev container: TTS, full pipeline wiring,
+  self-test, SD image construction, flasher. All functional risk is retired
+  here.
+- **Phase 2 — hardware.** Only what needs a Pi: audio/GPIO on real devices,
+  latency tuning against the 1.6 s target, thermals, power, release.
 
-- [ ] `Tts` port: text in, PCM chunks out through a callback or a ring.
-- [ ] Adapter: per-language voice resolution from `LangInfo::piper`, streaming
-      synthesis, first-chunk latency measured.
-- [ ] Playback path from M2 reused; barge-in (PTT during speech) stops output.
-- [ ] Tests with a fake voice; silence/length checks on real voices.
+Two facts bound Phase 1 and were verified, not assumed:
 
-**Acceptance:** French and English spoken inside budget; a language without a
-voice cannot reach the pipeline (already enforced by `ready()`).
-
----
-
-## M6 — Runtime container: everything running on the Pi
-
-**Todo**
-
-- [ ] Dockerfile stages for whisper.cpp, ONNX Runtime and Piper, all aarch64,
-      all pinned, all built with LTO where sane; final image ≤ 400 MB without
-      models.
-- [ ] Entrypoint runs `xtransd` with the real adapters; `--selftest` plays a
-      canned utterance through STT→MT→TTS and exits non-zero on mismatch.
-- [ ] systemd unit / compose restart policy, journal logging, stage timeouts
-      (needed since M1) with recovery to idle.
-- [ ] Audible ready prompt ("prêt" / "ready") through the speaker at boot.
-- [ ] Compose invariants kept: no network, read-only rootfs, non-root, devices.
-
-**Acceptance:** on the Pi, no keyboard, no network: press, speak, hear the
-translation in both directions; `--selftest` green inside the container.
+- **arm64 cannot be executed here**: `docker run --platform linux/arm64`
+  returns `exec format error` (no binfmt/QEMU). An aarch64 image can still be
+  *built* (cross toolchain + a sysroot assembled from Debian .debs), but never
+  *run* on this host. So arm64 binaries are packaging artifacts until Phase 2.
+- **Piper does not build from Debian packages alone**: `libpiper` compiles
+  espeak-ng from source at build time (`ExternalProject` → git), and needs a
+  newer espeak-ng than trixie's 1.52 (it uses
+  `espeak_TextToPhonemesWithTerminator`). Both must be vendored and pinned, and
+  the ExternalProject pointed at the local tree.
 
 ---
 
-## M7 — SD image builder
+## M5 — TTS: Piper (Phase 1)
 
-**Todo**
+**Todo, with feasibility**
 
-- [ ] Reproducible image build script: Raspberry Pi OS Lite 64-bit base, Docker
-      engine, `xtrans` image tar, models, compose file, unit, ALSA config,
-      read-only log partition.
-- [ ] SHA-256 manifest of every input; deterministic output where the format
-      allows it.
-- [ ] Verification job that mounts the produced image read-only (loopback) and
-      checks: unit enabled, image tar present, model hashes, no network unit.
-- [ ] Image size budget: ≤ 8 GB, leaves ≥ 50 GB usable on a 64 GB card.
+| Sub-step | Feasible here? | Notes |
+| --- | --- | --- |
+| Pin `piper1-gpl` (GPL-3) + espeak-ng tarballs by SHA-256 | yes | extend `third_party/` pins + `fetch_third_party.sh` |
+| Build `libpiper` against vendored espeak-ng + Debian ONNX Runtime | yes | patch `ExternalProject` to use the local espeak-ng tree (`third_party/patches/`, documented) |
+| Voice files fr/en/th (`.onnx` + `.onnx.json`) | yes | ~60–75 MB each; lao/hmong have no voice |
+| `Tts` port + adapter, sentence resolution from `LangInfo::piper` | yes | streaming PCM out; no hardware needed |
+| Verify audio by writing WAV to disk (no speaker) | yes | check format 16 kHz mono, duration, RMS; compare against known phrases |
+| First-chunk latency on x86 | yes | relative signal only; Pi numbers in M9 |
+| Barge-in (PTT stops playback) | yes | feed the `Device` loop with a fake `AudioOut` |
 
-**Acceptance:** image builds from a clean checkout with one command; the
-loopback verification passes in test; the image boots on the Pi (M9).
+**Acceptance:** `xtrans-mt`-style CLI produces a correct WAV for fr/en/th; a
+sentence synthesises in < 250 ms on the dev host (Pi number deferred).
 
----
-
-## M8 — Flasher binary
-
-**Todo**
-
-- [ ] C++20, single static binary, no runtime deps; `--device`, `--dry-run`,
-      `--yes`, `--image`, `--log`.
-- [ ] Enumerates block devices and refuses anything not removable or not
-      explicitly named; refuses mounted targets; never guesses.
-- [ ] Writes image, verifies by reading back and comparing SHA-256, reports
-      progress, flushes to the device, prints eject instructions.
-- [ ] Tests against loopback files (`/tmp` images), simulated write errors,
-      short writes, interruption at every step; no real card in tests.
-- [ ] Optional: post-flash verification of the boot partition contents.
-
-**Acceptance:** host test suite green; a 64 GB card flashed twice yields
-byte-identical checksums; no way to hit the wrong disk without typing it.
+**Risks:** the espeak-ng patch is the only fragile piece; fallback is running
+`piper`'s CLI as a subprocess (slower, but isolates the build).
 
 ---
 
-## M9 — Hardware acceptance and release
+## M6 — Full pipeline wiring and self-test (Phase 1)
 
-**Todo**
+**Todo, with feasibility**
 
-- [ ] Full hardware loop: battery, mic, amp, speaker, three buttons, both
-      directions, French ↔ English, Thai/Lao if validated.
-- [ ] Thermal soak (30 min), power draw, SD-card wear check.
-- [ ] Cold boot to ready prompt time measured.
-- [ ] Docs: assembly, flashing, recovery, known limits (Hmong/Yunnan).
-- [ ] Tag release with image hash and installer hash.
+| Sub-step | Feasible here? | Notes |
+| --- | --- | --- |
+| Wire STT → MT → TTS in `xtransd --device` (no abort after MT) | yes | pure code + fakes |
+| `--selftest`: WAV in → transcript → translation → WAV out, non-zero exit on failure | yes | use `jfk.wav` (en→fr) and a locally synthesised French WAV (fr→en) |
+| Stage timeouts in `Pipeline` (`AGENTS.md` §10) | yes | deterministic tests with an injected clock value, no sleeps |
+| Audible ready prompt generated at startup | yes | write WAV, verify non-empty; playback only in M9 |
+| systemd unit + compose files | yes | `systemd-analyze verify` in the container; boot test in M9 |
+| Model/voice layout under `/opt/xtrans/models` | yes | already documented in `docs/docker.md` |
 
-**Acceptance:** a person who has never seen the project can flash a card, plug
-the battery, and translate.
+**Acceptance:** `--selftest` passes on the x86 dev container with the real
+models, and produces two WAV files whose duration is plausible.
+
+---
+
+## M7 — SD image construction (Phase 1)
+
+**Todo, with feasibility**
+
+| Sub-step | Feasible here? | Notes |
+| --- | --- | --- |
+| Download and pin Raspberry Pi OS Lite arm64 (trixie) | yes | ~1.2 GB, SHA-256 pinned |
+| Inject Docker engine, compose file, unit, models, container tar | yes | needs Docker arm64 packages (download .deb, no execution) |
+| Cross-build the arm64 container | yes, build-only | sysroot from Debian arm64 .debs; cannot be run here |
+| Read-only data partition + boot config | yes | file-level edits, no execution |
+| Loopback verification (mount, check hashes, unit enabled) | yes, with caveats | needs `--privileged` container or sudo; verify early with a small ext4 image |
+| Reproducibility | partial | filesystem timestamps vary; pin inputs and document the nondeterminism |
+
+**Acceptance:** image builds with one command; verification script reports
+model hashes, unit, docker, and free space; image ≤ 8 GB.
+
+**Risks:** mounting inside the Docker Desktop VM may be restricted. If
+`--privileged` mounting fails, fall back to `mtools`/`e2ls`-style inspection of
+the FAT boot partition plus a hash manifest, and accept that full mount
+verification happens in M9.
+
+---
+
+## M8 — Flasher binary (Phase 1)
+
+**Todo, with feasibility**
+
+| Sub-step | Feasible here? | Notes |
+| --- | --- | --- |
+| Enumerate block devices, refuse non-removable/mounted/ambiguous | yes | `/sys/class/block`, `/proc/mounts`; no hardware needed |
+| Write image, flush, read-back SHA-256 verify | yes | tests against regular files in `/tmp`; block device path only in M9 |
+| Progress, `--dry-run`, `--yes`, `--log` | yes | plain C++20, no deps |
+| Tests: short writes, interrupted write, wrong device, EACCES | yes | injectable writer interface + fakes |
+| Static-ish binary (no runtime deps beyond libc) | yes | `-static-libstdc++ -static-libgcc`, verify with `ldd` |
+
+**Acceptance:** loopback test suite green; checksum mismatch is detected and
+reported; no code path writes without an explicit `--device`.
+
+---
+
+## M9 — Hardware bring-up, tuning and release (Phase 2)
+
+Only this milestone requires the Pi 5 (8 GB) and the card reader.
+
+| Sub-step | Needs |
+| --- | --- |
+| Flash a card, boot, read the journal over serial/network | Pi + SD |
+| ALSA capture/playback on the real mic/amp/speaker | Pi + audio hardware |
+| GPIO buttons on real switches (debounce under real bounce) | Pi + buttons |
+| Latency measurement per stage; 1.6 s target | Pi |
+| Runtime decision if over budget: CTranslate2 for MT, `tiny`/`audio_ctx` for STT | Pi + owner decision |
+| Ready prompt, both directions, spoken output | Pi + speaker |
+| Thermal soak (30 min), power draw, SD wear | Pi + battery |
+| Release: image hash + flasher hash, docs | — |
+
+**Acceptance:** a person who has never seen the project flashes a card, plugs
+the battery, and translates.
 
 ---
 
 ## Ordering notes
 
-- M1 is pure core and unblocked.
-- M2 needs Docker access; M3–M5 need the dev image for verification too.
-- M7 can start once M6's image is buildable, but its loopback verification runs
-  on the host.
-- No milestone starts before the previous one's reflection is written.
+- No milestone after M4 may depend on the Pi until M9.
+- arm64 artifacts are built, not executed, before M9. Any claim about Pi
+  behaviour is deferred, not assumed.
+- The 1.6 s promise stays a hard target; the lever set (CTranslate2, whisper
+  model size/audio_ctx) is prepared in Phase 1 where it can be measured
+  relatively, and decided in M9 with Pi numbers.
