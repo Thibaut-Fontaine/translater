@@ -331,12 +331,20 @@ unit test could reach.
 
 ## M7 — SD image construction (Phase 1)
 
-**Status:** partial. The arm64 container now **builds** with every adapter
-(cross-compiled on the host, no emulation): `xtransd` + `libpiper.so` + the
-espeak-ng data, with linkage verified by `readelf` (no ONNX Runtime in the
-DT_NEEDED list, so the delay-load design holds). Running it under QEMU crashes
-before `main` and even `--help` hangs, so the payload is **not runtime-verified**;
-the image builder and its verification script are not written yet.
+**Status:** payload validated on arm64; image builder still missing.
+
+The arm64 container builds (cross-compiled) and now **runs**: under QEMU the
+full selftest passes — French 28 049 samples in, 29-char transcript, 16-char
+translation, 18 575 samples out, both WAVs written (16 min wall, emulation).
+
+The startup crash was a packaging detail: Debian's arm64 ONNX Runtime installs
+`libonnxruntime.so.1.21` with **no `.so.1` or `.so`**, so the delay loader
+returned null and the first ORT call segfaulted. The loader now tries
+`.so.1`, `.so.1.21` and `.so`, and the runtime image adds the stable
+`.so.1` symlink.
+
+Remaining for M7: the image builder (partition injection + Docker install +
+verification) and the pinned Raspberry Pi OS base.
 
 
 **Todo, with feasibility**

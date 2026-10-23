@@ -11,11 +11,15 @@
 
 extern "C" const OrtApiBase* OrtGetApiBase(void) {
   static const OrtApiBase* base = []() -> const OrtApiBase* {
-    // Debian ships the unversioned soname in libonnxruntime-dev; the runtime
-    // package may only install the versioned one.
-    void* handle = dlopen("libonnxruntime.so.1", RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND);
-    if (handle == nullptr) {
-      handle = dlopen("libonnxruntime.so", RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND);
+    // Debian's arm64 runtime package installs libonnxruntime.so.1.21 without
+    // the .so.1 / .so names; the -dev package adds .so. Try every spelling we
+    // have seen rather than depending on a packaging detail.
+    const char* candidates[] = {"libonnxruntime.so.1", "libonnxruntime.so.1.21",
+                                "libonnxruntime.so"};
+    void* handle = nullptr;
+    for (const char* name : candidates) {
+      handle = dlopen(name, RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND);
+      if (handle != nullptr) break;
     }
     if (handle == nullptr) return nullptr;
 
