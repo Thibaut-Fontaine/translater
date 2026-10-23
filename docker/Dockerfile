@@ -58,6 +58,8 @@ RUN apt-get update \
       libonnxruntime1.21 \
       libsentencepiece0 \
       tini \
+ && ln -sf /usr/lib/aarch64-linux-gnu/libonnxruntime.so.1.21 \
+          /usr/lib/aarch64-linux-gnu/libonnxruntime.so.1 \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --system --uid 10001 --user-group \
       --home-dir /var/lib/xtrans --create-home --shell /usr/sbin/nologin xtrans
