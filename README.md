@@ -46,6 +46,10 @@ Implemented and tested so far:
 per turn and logs status and lengths only, never the text. `xtrans-mt` and
 `xtrans-tts` are one-shot tools for benchmarking.
 
+`xtrans-install --image FILE --device NAME` writes an SD card and verifies it
+byte for byte; it refuses fixed disks, mounted targets and images that do not
+fit (`--dry-run` runs the checks only).
+
 `xtransd --selftest` runs a sentence through the whole chain without hardware:
 Piper synthesises French, Whisper transcribes it, NLLB translates to English,
 Piper speaks the result, and both WAVs are written for inspection.

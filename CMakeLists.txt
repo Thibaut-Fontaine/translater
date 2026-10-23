@@ -64,6 +64,7 @@ add_library(xtrans STATIC
   src/buttons.cpp
   src/control.cpp
   src/device.cpp
+  src/flash.cpp
   src/language.cpp
   src/nllb_ids.cpp
   src/pipeline.cpp
@@ -208,6 +209,10 @@ if(TARGET xtrans_ort_loader)
 endif()
 install(TARGETS xtrans-mt RUNTIME DESTINATION bin)
 
+add_executable(xtrans-install apps/xtrans-install.cpp)
+target_link_libraries(xtrans-install PRIVATE xtrans)
+install(TARGETS xtrans-install RUNTIME DESTINATION bin)
+
 add_executable(xtrans-tts apps/xtrans-tts.cpp)
 target_link_libraries(xtrans-tts PRIVATE xtrans)
 if(TARGET xtrans_ort_loader)
@@ -225,6 +230,7 @@ if(XTRANS_BUILD_TESTS)
     tests/test_buttons.cpp
     tests/test_control.cpp
     tests/test_device.cpp
+    tests/test_flash.cpp
     tests/test_language.cpp
     tests/test_nllb.cpp
     tests/test_pipeline.cpp
