@@ -25,9 +25,12 @@ endif()
 
 add_library(xtrans STATIC
   src/audio.cpp
+  src/buttons.cpp
   src/control.cpp
+  src/device.cpp
   src/language.cpp
   src/pipeline.cpp
+  src/recorder.cpp
 )
 
 target_include_directories(xtrans PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
@@ -63,9 +66,12 @@ if(XTRANS_BUILD_TESTS)
   add_executable(xtrans_tests
     tests/main.cpp
     tests/test_audio.cpp
+    tests/test_buttons.cpp
     tests/test_control.cpp
+    tests/test_device.cpp
     tests/test_language.cpp
     tests/test_pipeline.cpp
+    tests/test_recorder.cpp
   )
   target_link_libraries(xtrans_tests PRIVATE xtrans)
 
