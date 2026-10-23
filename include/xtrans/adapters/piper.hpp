@@ -36,8 +36,9 @@ class PiperTts final : public Tts {
 
  private:
   PiperTts() noexcept;
+  // Not noexcept: Piper's C++ may throw, and speak() catches at the boundary.
   TtsStatus synthesize(std::string_view text, Lang lang, std::span<std::int16_t> out,
-                       std::size_t& written) noexcept;
+                       std::size_t& written);
   struct Impl;
   std::unique_ptr<Impl> impl_;
 };

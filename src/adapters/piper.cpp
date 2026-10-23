@@ -98,7 +98,7 @@ TtsStatus PiperTts::speak(std::string_view text, Lang lang, std::span<std::int16
 }
 
 TtsStatus PiperTts::synthesize(std::string_view text, Lang lang, std::span<std::int16_t> out,
-                               std::size_t& written) noexcept {
+                               std::size_t& written) {
   auto& impl = *impl_;
   piper_synthesizer* synth = impl.voice_for(lang);
   if (synth == nullptr) return TtsStatus::unsupported;
