@@ -31,6 +31,7 @@ compile_commands.json
 
 # Pinned third-party sources (see third_party/*.pin)
 third_party/whisper.cpp/
+third_party/piper/
 third_party/downloads/
 
 # Models and voice files (pins are tracked, the weights are not)

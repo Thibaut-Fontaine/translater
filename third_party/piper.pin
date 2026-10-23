@@ -1,0 +1,6 @@
+# Piper (GPL-3) with its vendored espeak-ng / open_jtalk pins.
+# Fetched by scripts/fetch_third_party.sh; the tree is gitignored.
+version 619f513
+commit 619f513580c04dff5ef9a680f6f3f6979ed94d2e
+url https://codeload.github.com/OHF-Voice/piper1-gpl/tar.gz/619f513580c04dff5ef9a680f6f3f6979ed94d2e
+sha256 8e0c990332895f23fdba02c7d332e637890f7175b4a4d51db3cf207136d4b304

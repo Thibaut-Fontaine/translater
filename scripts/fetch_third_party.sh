@@ -9,19 +9,23 @@
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-PIN="$ROOT/third_party/whisper.pin"
-DEST="$ROOT/third_party/whisper.cpp"
 DOWNLOADS="$ROOT/third_party/downloads"
+
+# name:pin-file:destination
+PINS=(
+  "whisper:$ROOT/third_party/whisper.pin:$ROOT/third_party/whisper.cpp"
+  "piper:$ROOT/third_party/piper.pin:$ROOT/third_party/piper"
+)
 
 usage() {
   cat <<'EOF'
 usage: scripts/fetch_third_party.sh [--force] [--self-test]
 
-Fetches whisper.cpp at the commit pinned in third_party/whisper.pin, verifies
-its SHA-256, and extracts it to third_party/whisper.cpp (gitignored).
+Fetches whisper.cpp and Piper at the commits pinned in third_party/*.pin,
+verifies their SHA-256, and extracts them (gitignored).
 
-  --force      re-download and re-extract even if the tree exists
-  --self-test  validate the pin file and the digest path without downloading
+  --force      re-download and re-extract even if the trees exist
+  --self-test  validate the pin files and the digest path without downloading
 EOF
 }
 
@@ -44,38 +48,55 @@ read_pin() {
     die "incomplete pin file: $file"
 }
 
-fetch_whisper() {
-  read_pin "$PIN"
+apply_patches() {
+  local name="$1" dest="$2" patch_file
+  for patch_file in "$ROOT/third_party/patches/$name"-*.patch; do
+    [[ -f "$patch_file" ]] || continue
+    echo "patch   $name: $(basename "$patch_file")"
+    patch -p1 -d "$dest" <"$patch_file" || die "patch failed: $patch_file"
+  done
+}
+
+fetch_pin() {
+  local name="$1" pin="$2" dest="$3"
+  read_pin "$pin"
   mkdir -p "$DOWNLOADS"
 
-  local archive="$DOWNLOADS/whisper-$VERSION.tar.gz"
+  local archive="$DOWNLOADS/$name-$VERSION.tar.gz"
   if [[ "$FORCE" == "1" || ! -f "$archive" ]]; then
-    echo "downloading whisper.cpp $VERSION"
+    echo "downloading $name $VERSION"
     curl -fsSL -o "$archive.tmp" "$URL"
     mv "$archive.tmp" "$archive"
   fi
 
   echo "$SHA256  $archive" | sha256sum -c - >/dev/null || die "digest mismatch for $archive"
 
-  if [[ "$FORCE" != "1" && -f "$DEST/CMakeLists.txt" ]]; then
-    echo "whisper.cpp $VERSION already present"
+  if [[ "$FORCE" != "1" && -f "$dest/CMakeLists.txt" ]]; then
+    echo "$name $VERSION already present"
     return
   fi
 
-  rm -rf "$DEST" "$DEST.tmp"
-  mkdir -p "$DEST.tmp"
-  tar -xzf "$archive" -C "$DEST.tmp" --strip-components=1
-  mv "$DEST.tmp" "$DEST"
-  echo "whisper.cpp $VERSION -> $DEST"
+  rm -rf "$dest" "$dest.tmp"
+  mkdir -p "$dest.tmp"
+  tar -xzf "$archive" -C "$dest.tmp" --strip-components=1
+  mv "$dest.tmp" "$dest"
+  apply_patches "$name" "$dest"
+  echo "$name $VERSION -> $dest"
 }
 
 self_test() {
   local failed=0
   bash -n "${BASH_SOURCE[0]}" || failed=1
-  read_pin "$PIN" || failed=1
-  [[ "$SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo "bad sha256 in pin" >&2; failed=1; }
-  [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "bad commit in pin" >&2; failed=1; }
-  [[ "$URL" == *"$COMMIT"* ]] || { echo "url does not embed the pinned commit" >&2; failed=1; }
+
+  local entry name pin dest
+  for entry in "${PINS[@]}"; do
+    IFS=: read -r name pin dest <<<"$entry"
+    read_pin "$pin" || failed=1
+    [[ "$SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo "$name: bad sha256" >&2; failed=1; }
+    [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "$name: bad commit" >&2; failed=1; }
+    [[ "$URL" == *"$COMMIT"* ]] || { echo "$name: url lacks commit" >&2; failed=1; }
+    [[ "$dest" == "$ROOT/third_party/"* ]] || { echo "$name: destination escapes" >&2; failed=1; }
+  done
 
   local tmp
   tmp="$(mktemp)"
@@ -88,7 +109,6 @@ self_test() {
   fi
   rm -f "$tmp"
 
-  [[ "$DEST" == "$ROOT/third_party/"* ]] || { echo "destination escapes third_party" >&2; failed=1; }
   if ((failed == 0)); then echo "self-test: ok"; fi
   return "$failed"
 }
@@ -102,4 +122,7 @@ case "${1:-}" in
   *) usage >&2; exit 2 ;;
 esac
 
-fetch_whisper
+for entry in "${PINS[@]}"; do
+  IFS=: read -r name pin dest <<<"$entry"
+  fetch_pin "$name" "$pin" "$dest"
+done

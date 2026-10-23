@@ -7,7 +7,7 @@ Target languages, in order of intended priority. The capability table in
 | --- | --- | --- | --- | --- | --- |
 | French | `fra` | `fra_Latn` | yes (`fr`) | `fr_FR-siwis-medium` | yes |
 | English | `eng` | `eng_Latn` | yes (`en`) | `en_US-lessac-medium` | yes |
-| Thai | `tha` | `tha_Thai` | yes (`th`) | `th_TH-tsync2-medium` exists, unvalidated | no |
+| Thai | `tha` | `tha_Thai` | yes (`th`) | one voice exists but needs a piper >= 1.9 Thai frontend | no |
 | Lao | `lao` | `lao_Laoo` | yes (`lo`) | **none exists** | no |
 | Hmong | `hmn` | none (NLLB has no `hmn_Latn`) | no | **none exists** | no |
 | Yunnan minority languages | varies | only Tibetan, Jingpho, Shan (see below) | no | none | no |
@@ -47,7 +47,10 @@ set needs a different model, and no sub-1B candidate found so far covers them.
 
 - French and English: several voices each (`fr_FR-siwis-medium`,
   `en_US-lessac-medium` chosen).
-- Thai: a single voice, `th_TH-tsync2-medium`.
+- Thai: a single voice, `th_TH-tsync2-medium`, but its config declares
+  `phoneme_type: "thai"`, a frontend that piper 1.8 (pinned here) does not
+  implement. Synthesis fails cleanly; Thai stays without TTS until piper adds
+  that frontend or another Thai voice appears.
 - Lao: **no voice at all**. Hmong: **no voice at all**.
 - Also available: Vietnamese, Indonesian, Chinese, Japanese, Korean.
 

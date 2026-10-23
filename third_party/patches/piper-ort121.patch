@@ -1,0 +1,22 @@
+--- a/libpiper/src/piper.cpp
++++ b/libpiper/src/piper.cpp
+@@ -748,7 +748,18 @@
+   std::array<const char *, 4> input_names = {"input", "input_lengths", "scales",
+                                              "sid"};
+ 
+-  std::vector<std::string> output_names_strs = synth->session->GetOutputNames();
++  // ONNX Runtime >= 1.22 has GetOutputNames(); 1.21 (Debian trixie) exposes
++  // the allocator-based API instead.
++  std::vector<std::string> output_names_strs;
++  {
++    const Ort::AllocatorWithDefaultOptions allocator;
++    const size_t output_count = synth->session->GetOutputCount();
++    output_names_strs.reserve(output_count);
++    for (size_t i = 0; i < output_count; ++i) {
++      const auto name = synth->session->GetOutputNameAllocated(i, allocator);
++      output_names_strs.emplace_back(name.get());
++    }
++  }
+   std::vector<const char *> output_names;
+   output_names.reserve(output_names_strs.size());
+   for (const auto &name : output_names_strs) {
