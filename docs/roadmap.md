@@ -118,16 +118,39 @@ device mode is record-only and aborts the pipeline after each turn until M3.
 
 **Todo**
 
-- [ ] Vendor whisper.cpp at a pinned commit under `third_party/`, static lib.
-- [ ] `Stt` port: `transcribe(span<const int16_t>, Lang) -> text` into a caller
-      buffer, explicit status codes.
-- [ ] Adapter: model loaded once at startup, 4 threads, no prompt, language from
-      `LangInfo::whisper`, empty result means "nothing recognised".
-- [ ] Tests with a fake `Stt`; real-model check in the container only.
-- [ ] Microbenchmark committed: 3 s utterance → ms, on the Pi and on the host.
+- [x] Vendor whisper.cpp at a pinned commit under `third_party/`, static lib
+      (pin + digest + `scripts/fetch_third_party.sh`, no submodule).
+- [x] `Stt` port: `transcribe(span<const int16_t>, Lang) -> text` into a caller
+      buffer, explicit status codes; `TextBuffer` for bounded UTF-8 assembly.
+- [x] Adapter: model loaded once at startup, 4 threads, no prompt, language from
+      `LangInfo::whisper`, empty result means `no_speech`.
+- [x] Tests for the text assembly (join, trim, truncation, UTF-8 boundary);
+      real-model check run with the base model on `jfk.wav`.
+- [~] Microbenchmark: host numbers recorded below; device numbers move to M6.
 
 **Acceptance:** French and English utterances transcribe on the device inside the
 budget from `AGENTS.md` §6; unready languages are never requested.
+**Partially met:** English verified end to end on the host (real model, real
+speech). French not yet measured; device latency not yet measured.
+
+**Reflection:** three things worth recording.
+
+- **Vendoring by pin, not submodule.** The repo keeps a 4-line pin file; the
+  9 MB tarball and 40 MB tree stay out of git, and `fetch_third_party.sh`
+  verifies the digest before extracting. CI can still build offline once the
+  tree is present.
+- **The first adapter draft was wrong** and only the real-model probe showed
+  it: it split the utterance into 16 k-sample chunks and called `whisper_full`
+  per chunk, which restarts decoding and silently drops context. Replaced with
+  a 15 s float buffer allocated once at `open()`, matching the recorder's cap.
+- **Measured latency is not the budget yet.** `jfk.wav` (11 s, English, base
+  model, 4 threads) takes ~22 s wall on this x86 host: far outside real time.
+  `whisper_full` always processes a 30 s window, so a 3 s utterance will not be
+  6× cheaper. This needs a Pi 5 measurement before the 700 ms budget can be
+  believed — likely with a quantized model (`q5_1`) and possibly `base.en` for
+  English-only turns. Decision deferred to M6, with numbers, not guesses.
+
+Privacy held: the daemon logs `stt status=N chars=M`, never the transcript.
 
 ---
 

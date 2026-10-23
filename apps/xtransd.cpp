@@ -6,6 +6,7 @@
 //
 // The device mode currently records a turn and reports it, then aborts the
 // pipeline: the STT/MT/TTS adapters land in the next milestones.
+#include <array>
 #include <csignal>
 #include <cstdio>
 #include <cstring>
@@ -17,9 +18,15 @@
 #include "xtrans/control.hpp"
 #include "xtrans/device.hpp"
 
+#include "xtrans/stt.hpp"
+
 #if XTRANS_WITH_ALSA && XTRANS_WITH_GPIOD
 #include "xtrans/adapters/alsa.hpp"
 #include "xtrans/adapters/gpiod.hpp"
+#endif
+
+#if XTRANS_WITH_WHISPER
+#include "xtrans/adapters/whisper.hpp"
 #endif
 
 namespace {
@@ -30,13 +37,14 @@ extern "C" void handle_signal(int) { g_stop = 1; }
 
 void usage(const char* argv0) {
   std::printf(
-      "usage: %s [--stdin | --device | --help]\n"
+      "usage: %s [--stdin | --device [--model FILE] | --help]\n"
       "\n"
       "  --stdin   read control lines (press|release|abort|lang-a|lang-b|swap|"
       "quit)\n"
       "            on stdin and print the controller status after each one\n"
       "  --device  use the real buttons and microphone; each finished turn is\n"
       "            reported with its sample count and duration\n"
+      "  --model   whisper.cpp model for speech recognition (device mode only)\n"
       "\n"
       "Exits on EOF (--stdin), SIGINT or SIGTERM.\n",
       argv0);
@@ -79,7 +87,7 @@ int run_stdin() {
   return 0;
 }
 
-int run_device() {
+int run_device(const char* model_path) {
 #if XTRANS_WITH_ALSA && XTRANS_WITH_GPIOD
   std::string error;
 
@@ -95,6 +103,23 @@ int run_device() {
     std::fprintf(stderr, "xtransd: audio: %s\n", error.c_str());
     return 3;
   }
+
+  std::unique_ptr<xtrans::Stt> stt;
+#if XTRANS_WITH_WHISPER
+  if (model_path != nullptr) {
+    auto whisper = xtrans::WhisperStt::open(model_path, error);
+    if (!whisper) {
+      std::fprintf(stderr, "xtransd: stt: %s\n", error.c_str());
+      return 3;
+    }
+    stt = std::move(whisper);
+  }
+#else
+  if (model_path != nullptr) {
+    std::fputs("xtransd: built without whisper.cpp (no --model support)\n", stderr);
+    return 3;
+  }
+#endif
 
   // 15 s of 16 kHz mono: the turn cap from AGENTS.md §6, allocated once.
   std::vector<std::int16_t> capture(xtrans::kSampleRate * 15);
@@ -115,12 +140,25 @@ int run_device() {
         std::printf("turn samples=%zu ms=%u\n", turn.size(), ms);
       }
       std::fflush(stdout);
-      device.controller().pipeline().abort();  // until STT/MT/TTS exist
+
+      if (stt && !turn.empty()) {
+        std::array<char, 1024> text{};
+        std::size_t written = 0;
+        const xtrans::SttStatus status =
+            stt->transcribe(turn, device.controller().selector().pair().from(), text, written);
+        // Transcript content stays private: log the outcome, not the words.
+        std::printf("stt status=%d chars=%zu\n", static_cast<int>(status), written);
+        std::fflush(stdout);
+        device.controller().pipeline().complete(xtrans::Stage::stt,
+                                               status == xtrans::SttStatus::ok);
+      }
+      device.controller().pipeline().abort();  // until MT/TTS exist
     }
     nanosleep(&tick_delay, nullptr);
   }
   return 0;
 #else
+  (void)model_path;
   std::fputs("xtransd: built without ALSA/GPIO adapters (use --stdin)\n", stderr);
   return 3;
 #endif
@@ -129,6 +167,8 @@ int run_device() {
 }  // namespace
 
 int main(int argc, char** argv) {
+  bool device = false;
+  const char* model_path = nullptr;
   for (int i = 1; i < argc; ++i) {
     if (std::strcmp(argv[i], "--help") == 0) {
       usage(argv[0]);
@@ -136,9 +176,12 @@ int main(int argc, char** argv) {
     }
     if (std::strcmp(argv[i], "--stdin") == 0) continue;
     if (std::strcmp(argv[i], "--device") == 0) {
-      std::signal(SIGINT, handle_signal);
-      std::signal(SIGTERM, handle_signal);
-      return run_device();
+      device = true;
+      continue;
+    }
+    if (std::strcmp(argv[i], "--model") == 0 && i + 1 < argc) {
+      model_path = argv[++i];
+      continue;
     }
     std::fprintf(stderr, "xtransd: unknown argument '%s' (try --help)\n", argv[i]);
     return 2;
@@ -146,6 +189,8 @@ int main(int argc, char** argv) {
 
   std::signal(SIGINT, handle_signal);
   std::signal(SIGTERM, handle_signal);
+  if (device) return run_device(model_path);
+
   std::signal(SIGPIPE, SIG_IGN);
   return run_stdin();
 }
