@@ -126,11 +126,10 @@ struct NllbMt::Impl {
   std::vector<int> sp_ids;
   std::string output_text;
 
-  std::uint64_t requests = 0;
   std::size_t last_tokens = 0;
 };
 
-NllbMt::NllbMt() noexcept : impl_(std::make_unique<Impl>(NllbConfig{}.threads)) {}
+NllbMt::NllbMt() : impl_(std::make_unique<Impl>(NllbConfig{}.threads)) {}
 
 NllbMt::~NllbMt() = default;
 
@@ -320,7 +319,6 @@ MtStatus NllbMt::translate(std::string_view text, Lang from, Lang to, std::span<
     const std::size_t take = std::min(impl.output_text.size(), out.size());
     std::memcpy(out.data(), impl.output_text.data(), take);
     written = take;
-    ++impl.requests;
     return MtStatus::ok;
   } catch (const std::exception&) {
     return MtStatus::failed;
@@ -328,8 +326,6 @@ MtStatus NllbMt::translate(std::string_view text, Lang from, Lang to, std::span<
     return MtStatus::failed;
   }
 }
-
-std::uint64_t NllbMt::requests() const noexcept { return impl_->requests; }
 
 std::size_t NllbMt::last_tokens() const noexcept { return impl_->last_tokens; }
 

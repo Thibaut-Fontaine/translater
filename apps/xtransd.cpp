@@ -205,7 +205,7 @@ int run_device(const char* model_path, const char* mt_dir) {
                                                  mt_status == xtrans::MtStatus::ok);
         }
       }
-      device.controller().pipeline().abort();  // until MT/TTS exist
+      device.controller().pipeline().abort();  // until TTS plays the result
     }
     nanosleep(&tick_delay, nullptr);
   }

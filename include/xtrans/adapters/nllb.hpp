@@ -40,14 +40,11 @@ class NllbMt final : public Mt {
   MtStatus translate(std::string_view text, Lang from, Lang to, std::span<char> out,
                      std::size_t& written) noexcept override;
 
-  // Model-load time is paid once at startup; useful for the boot log.
-  std::uint64_t requests() const noexcept;
-
   // Decoder steps used by the last translation (benchmark fuel).
   std::size_t last_tokens() const noexcept;
 
  private:
-  NllbMt() noexcept;
+  NllbMt();
   struct Impl;
   std::unique_ptr<Impl> impl_;
 };
