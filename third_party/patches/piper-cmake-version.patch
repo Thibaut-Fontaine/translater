@@ -1,0 +1,19 @@
+Upstream libpiper reads ${CMAKE_SOURCE_DIR}/../setup.py for its version. That
+path is correct when piper is the top-level project, but resolves outside our
+repository when it is added with add_subdirectory(). Read the file relative to
+the CMakeLists instead, and skip the version define if it is absent.
+--- a/libpiper/CMakeLists.txt
++++ b/libpiper/CMakeLists.txt
+@@ -245,9 +245,11 @@
+ # ---- version
+-file(READ ${CMAKE_SOURCE_DIR}/../setup.py SETUP_PY_CONTENTS)
+-string(REGEX MATCH "version=\"([0-9]+\\.[0-9]+\\.[0-9]+)\"" _ ${SETUP_PY_CONTENTS})
+-set(PIPER_VERSION ${CMAKE_MATCH_1})
++if(EXISTS ${CMAKE_CURRENT_LIST_DIR}/../setup.py)
++  file(READ ${CMAKE_CURRENT_LIST_DIR}/../setup.py SETUP_PY_CONTENTS)
++  string(REGEX MATCH "version=\"([0-9]+\\.[0-9]+\\.[0-9]+)\"" _ ${SETUP_PY_CONTENTS})
++  set(PIPER_VERSION ${CMAKE_MATCH_1})
++endif()
+
+ if(PIPER_VERSION)
+   message(STATUS "Parsed Piper Version: ${PIPER_VERSION}")

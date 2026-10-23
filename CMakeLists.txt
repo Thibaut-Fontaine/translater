@@ -7,6 +7,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+# Debian ships libonnxruntime-dev without a CMake package config; ours defines
+# onnxruntime::onnxruntime so third-party projects use the distro library.
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 option(XTRANS_WERROR "Treat compiler warnings as errors" ON)
 option(XTRANS_NATIVE "Tune for the build host (never for release artifacts)" OFF)
@@ -57,6 +60,7 @@ option(XTRANS_WITH_NLLB "Build the NLLB translation adapter" ${XTRANS_NLLB_DEFAU
 
 add_library(xtrans STATIC
   src/audio.cpp
+  src/audio_convert.cpp
   src/buttons.cpp
   src/control.cpp
   src/device.cpp
@@ -65,6 +69,7 @@ add_library(xtrans STATIC
   src/pipeline.cpp
   src/recorder.cpp
   src/text.cpp
+  src/wav.cpp
 )
 
 target_include_directories(xtrans PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
@@ -110,6 +115,30 @@ if(XTRANS_WITH_NLLB)
 else()
   target_compile_definitions(xtrans PUBLIC XTRANS_WITH_NLLB=0)
   message(STATUS "NLLB adapter: disabled (libonnxruntime-dev / libsentencepiece-dev not found)")
+endif()
+
+set(XTRANS_PIPER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/piper")
+if(EXISTS "${XTRANS_PIPER_DIR}/libpiper/CMakeLists.txt" AND XTRANS_ORT_INCLUDE_DIR)
+  set(XTRANS_PIPER_DEFAULT ON)
+else()
+  set(XTRANS_PIPER_DEFAULT OFF)
+endif()
+option(XTRANS_WITH_PIPER "Build the Piper TTS adapter" ${XTRANS_PIPER_DEFAULT})
+
+if(XTRANS_WITH_PIPER)
+  set(PIPER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+  # libpiper builds espeak-ng and open_jtalk from pinned git commits at build
+  # time; that is a build-machine concern, never the device.
+  add_subdirectory("${XTRANS_PIPER_DIR}/libpiper" "${CMAKE_BINARY_DIR}/piper" EXCLUDE_FROM_ALL)
+  target_sources(xtrans PRIVATE src/adapters/piper.cpp)
+  target_link_libraries(xtrans PRIVATE piper)
+  # Piper's C++ can throw (nlohmann/json, ONNX Runtime); catch at the boundary.
+  set_source_files_properties(src/adapters/piper.cpp PROPERTIES COMPILE_OPTIONS "-fexceptions")
+  target_compile_definitions(xtrans PUBLIC XTRANS_WITH_PIPER=1)
+  message(STATUS "Piper adapter: enabled")
+else()
+  target_compile_definitions(xtrans PUBLIC XTRANS_WITH_PIPER=0)
+  message(STATUS "Piper adapter: disabled (run scripts/fetch_third_party.sh)")
 endif()
 
 # whisper.cpp STT adapter. The tree is vendored by scripts/fetch_third_party.sh
@@ -162,12 +191,17 @@ add_executable(xtrans-mt apps/xtrans-mt.cpp)
 target_link_libraries(xtrans-mt PRIVATE xtrans)
 install(TARGETS xtrans-mt RUNTIME DESTINATION bin)
 
+add_executable(xtrans-tts apps/xtrans-tts.cpp)
+target_link_libraries(xtrans-tts PRIVATE xtrans)
+install(TARGETS xtrans-tts RUNTIME DESTINATION bin)
+
 option(XTRANS_BUILD_TESTS "Build the unit tests (host only)" ON)
 
 if(XTRANS_BUILD_TESTS)
   add_executable(xtrans_tests
     tests/main.cpp
     tests/test_audio.cpp
+    tests/test_convert.cpp
     tests/test_buttons.cpp
     tests/test_control.cpp
     tests/test_device.cpp
@@ -176,6 +210,7 @@ if(XTRANS_BUILD_TESTS)
     tests/test_pipeline.cpp
     tests/test_recorder.cpp
     tests/test_text.cpp
+    tests/test_wav.cpp
   )
   target_link_libraries(xtrans_tests PRIVATE xtrans)
 

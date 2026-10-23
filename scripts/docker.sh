@@ -47,7 +47,9 @@ require_docker() {
 
 cmd_test() {
   require_docker
-  docker build -f "$ROOT/docker/Dockerfile.dev" -t "$DEV_IMAGE" "$ROOT"
+  # The dev image is host-only: pin the platform so a stray arm64 tag of the
+  # base image can never leak in.
+  docker build --platform linux/amd64 -f "$ROOT/docker/Dockerfile.dev" -t "$DEV_IMAGE" "$ROOT"
   docker run --rm "$DEV_IMAGE"
 }
 

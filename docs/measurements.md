@@ -44,4 +44,19 @@ input length. This host has no VNNI; the Pi 5 with NEON dotprod may differ in
 either direction. If the Pi confirms this order of magnitude, the MT stage
 needs a different runtime (CTranslate2) or the latency budget needs revisiting.
 
+## TTS — Piper medium voices
+
+Date: 2026-10-23. Dev container, Debian trixie, ONNX Runtime 1.21, one thread
+(default). French/English medium voices (63 MB each), 22.05 kHz → resampled to
+16 kHz.
+
+| Case | Time |
+| --- | --- |
+| First call (loads voice + creates ORT session) | 9.6 s |
+| Steady state, 1.5 s of speech | 289 ms |
+
+Consequences: voices must be warmed at startup (done in `PiperTts::open`), and
+289 ms on this host is already above the 250 ms budget — the Pi number decides
+whether to keep medium voices or drop to low quality.
+
 Pi 5 numbers go here as soon as the device can run `xtransd --device --model`.

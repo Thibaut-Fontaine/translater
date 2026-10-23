@@ -256,11 +256,34 @@ Two facts bound Phase 1 and were verified, not assumed:
 | First-chunk latency on x86 | yes | relative signal only; Pi numbers in M9 |
 | Barge-in (PTT stops playback) | yes | feed the `Device` loop with a fake `AudioOut` |
 
-**Acceptance:** `xtrans-mt`-style CLI produces a correct WAV for fr/en/th; a
-sentence synthesises in < 250 ms on the dev host (Pi number deferred).
+**Acceptance:** `xtrans-tts` produces a correct WAV for fr/en; a sentence
+synthesises in < 250 ms on the dev host (Pi number deferred).
+**Met except latency:** fr/en WAVs are correct (1.4–1.5 s of audio); steady
+state is 256–289 ms on this host, just over budget; Thai is blocked (below).
 
-**Risks:** the espeak-ng patch is the only fragile piece; fallback is running
-`piper`'s CLI as a subprocess (slower, but isolates the build).
+**Reflection:** five defects, four of them only visible in the image build:
+
+1. A stray `docker run --platform linux/arm64` had retagged the local
+   `debian:trixie-slim` as arm64, so the next dev build died with
+   `exec format error`. The dev build now pins `--platform linux/amd64`; the
+   lesson is that local image tags are mutable state.
+2. Piper's CMake reads `${CMAKE_SOURCE_DIR}/../setup.py` for its version, which
+   escapes our repo under `add_subdirectory`. Patched to read relative to the
+   CMakeLists (`third_party/patches/piper-cmake-version.patch`).
+3. Piper 1.8 uses ONNX Runtime ≥ 1.22's `GetOutputNames()`; trixie ships 1.21.
+   Patched to the allocator API (`piper-ort121.patch`).
+4. Piper downloaded its own ONNX Runtime because Debian ships no CMake package
+   config. Added `cmake/onnxruntimeConfig.cmake` so both Piper and our adapter
+   link the distro library — this also matters for arm64 cross builds.
+5. `piece_count`/API differences aside, the Thai voice declares
+   `phoneme_type: "thai"`, a frontend piper 1.8 does not implement: synthesis
+   fails cleanly. Thai therefore has **no usable voice** today, which
+   reinforces the language table.
+
+Two design choices that paid off: float→int16 conversion and 22.05→16 kHz
+resampling are ours (unit-tested, no dependency), so the audio path stays at
+one rate; and voices are warmed in `open()` because the first call costs ~9.6 s
+(model + ORT session) versus 289 ms warm.
 
 ---
 
