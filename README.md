@@ -80,8 +80,9 @@ security posture (non-root, read-only rootfs, no network).
 
 Target languages: French, English, Thai, Lao, Hmong, and selected minority languages of
 Yunnan. Speech recognition and speech synthesis require models suitable for each selected
-language; support for Hmong and the Yunnan minority languages still has to be validated.
-See [docs/languages.md](docs/languages.md).
+language. NLLB-200 has no Hmong at all, and of the Yunnan languages it covers only Tibetan,
+Jingpho and Shan — the rest need a different translation model. See
+[docs/languages.md](docs/languages.md) for the verified list.
 
 ## Hardware
 
