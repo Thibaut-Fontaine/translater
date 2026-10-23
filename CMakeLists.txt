@@ -54,6 +54,7 @@ add_library(xtrans STATIC
   src/language.cpp
   src/pipeline.cpp
   src/recorder.cpp
+  src/text.cpp
 )
 
 target_include_directories(xtrans PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
@@ -84,6 +85,33 @@ if(XTRANS_WITH_GPIOD)
 else()
   target_compile_definitions(xtrans PUBLIC XTRANS_WITH_GPIOD=0)
   message(STATUS "GPIO adapter: disabled (libgpiod-dev not found)")
+endif()
+
+# whisper.cpp STT adapter. The tree is vendored by scripts/fetch_third_party.sh
+# and gitignored; the pin file is the source of truth.
+set(XTRANS_WHISPER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/whisper.cpp")
+if(EXISTS "${XTRANS_WHISPER_DIR}/CMakeLists.txt")
+  set(XTRANS_WHISPER_DEFAULT ON)
+else()
+  set(XTRANS_WHISPER_DEFAULT OFF)
+endif()
+option(XTRANS_WITH_WHISPER "Build the whisper.cpp STT adapter" ${XTRANS_WHISPER_DEFAULT})
+
+if(XTRANS_WITH_WHISPER)
+  set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+  set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+  set(WHISPER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+  set(WHISPER_BUILD_SERVER OFF CACHE BOOL "" FORCE)
+  set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
+  add_subdirectory("${XTRANS_WHISPER_DIR}" EXCLUDE_FROM_ALL)
+
+  target_sources(xtrans PRIVATE src/adapters/whisper.cpp)
+  target_link_libraries(xtrans PRIVATE whisper)
+  target_compile_definitions(xtrans PUBLIC XTRANS_WITH_WHISPER=1)
+  message(STATUS "whisper.cpp adapter: enabled")
+else()
+  target_compile_definitions(xtrans PUBLIC XTRANS_WITH_WHISPER=0)
+  message(STATUS "whisper.cpp adapter: disabled (run scripts/fetch_third_party.sh)")
 endif()
 
 # LTO only for optimised builds; debugging must stay fast to link.
@@ -117,6 +145,7 @@ if(XTRANS_BUILD_TESTS)
     tests/test_language.cpp
     tests/test_pipeline.cpp
     tests/test_recorder.cpp
+    tests/test_text.cpp
   )
   target_link_libraries(xtrans_tests PRIVATE xtrans)
 

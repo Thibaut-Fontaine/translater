@@ -26,3 +26,10 @@ build*/
 compile_commands.json
 *.gcda
 *.gcno
+
+# Pinned third-party sources (see third_party/*.pin)
+third_party/whisper.cpp/
+third_party/downloads/
+
+# Models and voice files
+models/

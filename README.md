@@ -35,10 +35,15 @@ Implemented and tested so far:
 - ALSA capture/playback and libgpiod buttons (`include/xtrans/adapters/`),
   compiled with `-Werror` in the dev image; `xtransd --device` runs them,
   `--stdin` stays the default
+- speech recognition: pinned whisper.cpp behind the `Stt` port
+  (`include/xtrans/stt.hpp`, `WhisperStt`), model loaded once, transcripts
+  assembled in a bounded UTF-8 buffer; `xtransd --device --model FILE` reports
+  recognition status per turn
 
-Not implemented yet: the whisper.cpp, NLLB and Piper adapters, and the systemd
-unit. Hardware I/O is compile-verified but not yet exercised on a Pi. See
-[docs/roadmap.md](docs/roadmap.md) for the milestone order.
+Not implemented yet: the NLLB translator, Piper voices, and the systemd unit.
+Hardware I/O is compile-verified but not yet exercised on a Pi. Latency is
+measured on the host only. See [docs/roadmap.md](docs/roadmap.md) for the
+milestone order.
 
 ## Build and test
 

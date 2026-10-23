@@ -1,0 +1,6 @@
+# Pinned third-party source. Fetched and verified by scripts/fetch_third_party.sh.
+# Never edit the extracted tree; change this file and re-run the script.
+version v1.9.5
+commit d2a764c648779feb36d44363f212a29b00aad1af
+url https://codeload.github.com/ggml-org/whisper.cpp/tar.gz/d2a764c648779feb36d44363f212a29b00aad1af
+sha256 f70aa528fcb2c4a3c843485cc8f299e7fee29d87b2b71b3f145504dc4b99a5ba
