@@ -160,11 +160,17 @@ Privacy held: the daemon logs `stt status=N chars=M`, never the transcript.
 
 **Todo**
 
-- [ ] ONNX Runtime from Debian trixie (`libonnxruntime-dev` 1.21.0, arm64),
-      same package Piper links against in M5 — no vendor binary.
-- [ ] Model provisioning: export NLLB-200-distilled-600M to ONNX int8 at build
-      time (pinned model revision + tokenizer), record SHA-256; the device never
-      converts, only loads. License is CC-BY-NC-4.0 — personal use only.
+- [x] ONNX Runtime from Debian trixie (`libonnxruntime-dev` 1.21.0, arm64),
+      same package Piper links against in M5 — no vendor binary. Images moved
+      to trixie as part of this, which forced the libgpiod 2.x port.
+- [x] `Mt` port and `translatable()` gate (both languages ready, pair distinct).
+- [ ] Model provisioning: NLLB-200-distilled-600M as ONNX int8 (pinned revision
+      + per-file SHA-256); the device never converts, only loads. License is
+      CC-BY-NC-4.0 — personal use only, confirmed by the owner.
+      Options under evaluation: pinned community export (encoder int8 415 MB +
+      decoder quantized 471 MB + 5 MB tokenizer, ~900 MB) versus exporting
+      locally with optimum (needs ~10 GB disk and 8+ GB RAM; this workstation
+      has 15 GB free, 6 GB RAM).
 
 - [ ] `Mt` port: `translate(span<const char> src, Lang from, Lang to, span<char> out)`.
 - [ ] SentencePiece tokenizer wired to NLLB's 256k vocabulary, truncation at a
