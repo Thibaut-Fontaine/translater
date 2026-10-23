@@ -9,7 +9,7 @@ Target languages, in order of intended priority. The capability table in
 | English | `eng` | `eng_Latn` | yes (`en`) | `en_US-lessac-medium` | yes |
 | Thai | `tha` | `tha_Thai` | yes (`th`) | none validated | no |
 | Lao | `lao` | `lao_Laoo` | yes (`lo`) | none validated | no |
-| Hmong | `hmn` | `hmn_Latn` | no | none | no |
+| Hmong | `hmn` | none (NLLB has no `hmn_Latn`) | no | none | no |
 | Yunnan minority languages | varies | varies | no | no | no |
 
 A language is **ready** only when all three capabilities are present
@@ -25,8 +25,9 @@ Each language needs three independent pieces, and all three must exist for the p
    clear, close-mic speech. Whisper's training data is thin for Lao and absent for most
    Yunnan minority languages.
 2. **Translation** — NLLB-200 Distilled 600M must include the language code and produce
-   usable output for the pair. Low-resource pairs degrade quickly; some pairs are effectively
-   unsupported in the distilled model.
+   usable output for the pair. It has 202 language tokens and **no Hmong**, so Hmong needs a
+   different translation model entirely. Low-resource pairs degrade quickly; some pairs are
+   effectively unsupported in the distilled model.
 3. **Speech synthesis** — a Piper voice must exist for the language. Piper covers many
    languages, but coverage for Southeast Asian minority languages is limited and voice quality
    varies.
