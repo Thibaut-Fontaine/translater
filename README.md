@@ -37,13 +37,18 @@ Implemented and tested so far:
   `--stdin` stays the default
 - speech recognition: pinned whisper.cpp behind the `Stt` port
   (`include/xtrans/stt.hpp`, `WhisperStt`), model loaded once, transcripts
-  assembled in a bounded UTF-8 buffer; `xtransd --device --model FILE` reports
-  recognition status per turn
+  assembled in a bounded UTF-8 buffer
+- translation: NLLB-200-distilled-600M int8 ONNX behind the `Mt` port
+  (`include/xtrans/adapters/nllb.hpp`), KV-cached decoder, pinned by SHA-256 in
+  `models/nllb.pin`; en→fr and fr→en match the reference implementation
 
-Not implemented yet: the NLLB translator, Piper voices, and the systemd unit.
-Hardware I/O is compile-verified but not yet exercised on a Pi. Latency is
-measured on the host only. See [docs/roadmap.md](docs/roadmap.md) for the
-milestone order.
+`xtransd --device --model FILE --mt-dir DIR` runs recognition and translation
+per turn and logs status and lengths only, never the text. `xtrans-mt` is a
+one-shot translator for benchmarking.
+
+Not implemented yet: Piper voices, playback, and the systemd unit. Hardware I/O
+is compile-verified but not yet exercised on a Pi. Latency is measured on the
+host only. See [docs/roadmap.md](docs/roadmap.md) for the milestone order.
 
 ## Build and test
 

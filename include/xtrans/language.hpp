@@ -26,6 +26,7 @@ struct LangInfo {
   std::string_view nllb;       // NLLB-200 code, e.g. "fra_Latn"
   std::string_view whisper;    // whisper.cpp code; empty = not supported
   std::string_view piper;      // Piper voice id; empty = no voice validated
+  std::int32_t nllb_id;        // NLLB tokenizer id; 0 = no translation path
   std::uint8_t caps;           // bitmask of kStt | kMt | kTts
 };
 

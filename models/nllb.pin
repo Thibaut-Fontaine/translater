@@ -1,0 +1,8 @@
+# NLLB-200-distilled-600M, ONNX int8 export (personal use: CC-BY-NC-4.0).
+# Fetched and verified by scripts/fetch_models.sh.
+repo Xenova/nllb-200-distilled-600M
+revision 261c31d1a5732c67cdd16d80e8d6088507c7ccea
+file encoder_model_int8.onnx onnx/encoder_model_int8.onnx da9234723304e9f76216b67a43ede4fe65393cbf5942a7e4a84595782a4bc161
+file decoder_model_quantized.onnx onnx/decoder_model_quantized.onnx ddea619b640379609719becf91a488c5e6ce4c4b2052efbb5388edaed465a552
+file decoder_with_past_model_quantized.onnx onnx/decoder_with_past_model_quantized.onnx 374293cb4bb59cd29810851a7cfbc568accb8efdc1a953ac04722e30adaf2d0b
+file sentencepiece.bpe.model sentencepiece.bpe.model 14bb8dfb35c0ffdea7bc01e56cea38b9e3d5efcdcb9c251d6b40538e1aab555a

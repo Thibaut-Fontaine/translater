@@ -181,11 +181,34 @@ Privacy held: the daemon logs `stt status=N chars=M`, never the transcript.
       model in unit tests.
 - [ ] Benchmark: fr→en and en→fr latency, RSS.
 
-**Status:** unblocked. The published export is correct; our token ids needed
-the NLLB offset (`sp_id + 1`) and a trailing EOS, verified in both directions
-against transformers.js. See `docs/nllb-onnx.md`.
+**Status:** done for correctness, open on performance.
 
-**Previous status:** blocked on model quality. The delay-load fix for the ORT /
+- `NllbMt` runs the int8 encoder + decoder pair with KV cache; en→fr and fr→en
+  produce the same output as the reference implementation.
+- Model provenance: `models/nllb.pin` (revision + per-file SHA-256), fetched by
+  `scripts/fetch_models.sh`; 1.3 GB total.
+- Latency on this x86 host: ~4.4 s for 6 decoder steps and ~6.6 s for 12, i.e.
+  ~550–730 ms per decoder step. Far from the 500 ms budget, but this host is an
+  old VM without VNNI; the Pi 5 measurement decides whether the ONNX int8 path
+  is viable or whether we switch the MT stage to CTranslate2.
+- `xtransd --device --model … --mt-dir …` now runs STT then MT per turn and
+  logs status plus lengths, never the text.
+
+**Acceptance:** partially met — quality and wiring verified, latency unproven.
+
+**Reflection:** three findings worth keeping:
+
+1. The merged decoder export cannot take an empty cache: ORT fails inside an
+   `If` branch reshape, reproduced in reference Python. The classic pair
+   (`decoder_model` + `decoder_with_past_model`) works and is only 100 MB
+   larger, so that is what we ship.
+2. The with-past decoder emits only self-attention KV (24 tensors), not
+   cross-attention: the cache has to be rotated by name, keeping encoder slots
+   from the first step. A naive "presents in order" rotation silently feeds
+   wrong tensors.
+3. Decoder cost is per-step, not per-sentence: 6 vs 12 steps scales the time.
+   If the Pi confirms ~600 ms/step, the fix is a faster decoder path, not a
+   smaller model — the tokens are already int8. The delay-load fix for the ORT /
 sentencepiece protobuf clash works, the `Mt` port and pair gate are in, and the
 language ids are known. The published ONNX export produces degenerate output
 even in reference Python, so no adapter can be validated against it. Findings,

@@ -8,12 +8,12 @@ namespace {
 // Capabilities mirror docs/languages.md. A language moves to kReady only after
 // its recognizer, translator and voice have been measured on the device.
 constexpr std::array<LangInfo, kLangCount> kTable{{
-    {Lang::fr, "fra", "fra_Latn", "fr", "fr_FR-siwis-medium", kReady},
-    {Lang::en, "eng", "eng_Latn", "en", "en_US-lessac-medium", kReady},
-    {Lang::th, "tha", "tha_Thai", "th", "", kStt | kMt},
-    {Lang::lo, "lao", "lao_Laoo", "lo", "", kStt | kMt},
+    {Lang::fr, "fra", "fra_Latn", "fr", "fr_FR-siwis-medium", 256057, kReady},
+    {Lang::en, "eng", "eng_Latn", "en", "en_US-lessac-medium", 256047, kReady},
+    {Lang::th, "tha", "tha_Thai", "th", "", 256175, kStt | kMt},
+    {Lang::lo, "lao", "lao_Laoo", "lo", "", 256100, kStt | kMt},
     // NLLB-200 has no Hmong language token; nothing can translate it yet.
-    {Lang::hmn, "hmn", "", "", "", 0},
+    {Lang::hmn, "hmn", "", "", "", 0, 0},
 }};
 
 constexpr std::array<Lang, 2> kSelectable{Lang::fr, Lang::en};
