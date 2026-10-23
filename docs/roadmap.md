@@ -160,6 +160,12 @@ Privacy held: the daemon logs `stt status=N chars=M`, never the transcript.
 
 **Todo**
 
+- [ ] ONNX Runtime from Debian trixie (`libonnxruntime-dev` 1.21.0, arm64),
+      same package Piper links against in M5 — no vendor binary.
+- [ ] Model provisioning: export NLLB-200-distilled-600M to ONNX int8 at build
+      time (pinned model revision + tokenizer), record SHA-256; the device never
+      converts, only loads. License is CC-BY-NC-4.0 — personal use only.
+
 - [ ] `Mt` port: `translate(span<const char> src, Lang from, Lang to, span<char> out)`.
 - [ ] SentencePiece tokenizer wired to NLLB's 256k vocabulary, truncation at a
       fixed token budget.
