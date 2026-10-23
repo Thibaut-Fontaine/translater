@@ -7,7 +7,7 @@
 #
 # The build stage runs on the native host CPU and cross-compiles for aarch64,
 # so no QEMU emulation is needed to produce the image.
-FROM --platform=$BUILDPLATFORM debian:bookworm-slim AS build
+FROM --platform=$BUILDPLATFORM debian:trixie-slim AS build
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
@@ -35,13 +35,15 @@ RUN cmake -S . -B build -G Ninja \
  && aarch64-linux-gnu-strip build/xtransd
 
 # Runtime: no compiler, no package manager writes, no network.
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      libasound2 \
-      libgpiod2 \
+      libasound2t64 \
+      libgpiod3 \
+      libonnxruntime1.21 \
+      libsentencepiece0 \
       tini \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --system --uid 10001 --user-group \
