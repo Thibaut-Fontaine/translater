@@ -95,3 +95,12 @@ TEST_CASE(test_language_pair_direction_swaps) {
   p.swap();
   CHECK_EQ(p.from(), Lang::fr);
 }
+
+TEST_CASE(test_language_only_ready_pairs_are_translatable) {
+  CHECK(translatable(Lang::fr, Lang::en));
+  CHECK(translatable(Lang::en, Lang::fr));
+  CHECK(!translatable(Lang::fr, Lang::fr));
+  CHECK(!translatable(Lang::fr, Lang::th));
+  CHECK(!translatable(Lang::hmn, Lang::en));
+  CHECK(!translatable(Lang::lo, Lang::hmn));
+}

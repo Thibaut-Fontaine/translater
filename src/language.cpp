@@ -28,6 +28,10 @@ const LangInfo& lang_info(Lang id) noexcept { return kTable[index_of(id)]; }
 
 bool ready(Lang id) noexcept { return lang_info(id).caps == kReady; }
 
+bool translatable(Lang from, Lang to) noexcept {
+  return from != to && ready(from) && ready(to);
+}
+
 std::span<const Lang> selectable() noexcept { return kSelectable; }
 
 void Selector::cycle(Button button) noexcept {
