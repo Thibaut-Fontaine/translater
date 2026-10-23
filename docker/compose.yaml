@@ -1,0 +1,45 @@
+# Runtime stack for the portable translator on the Raspberry Pi 5.
+#
+#   docker compose -f docker/compose.yaml up -d
+#
+# Security posture: no network namespace, read-only rootfs, all capabilities
+# dropped, non-root user, only the audio and GPIO devices passed through.
+name: xtrans
+
+services:
+  xtrans:
+    image: xtrans:arm64
+    platform: linux/arm64
+    container_name: xtrans
+    restart: unless-stopped
+    stop_grace_period: 5s
+
+    # The daemon reads control lines on stdin until the GPIO adapter lands.
+    # `stdin_open` keeps that pipe alive so the container idles instead of
+    # hitting EOF.
+    stdin_open: true
+    tty: false
+
+    # Fully offline device: no DNS, no sockets, nothing to phone home with.
+    network_mode: none
+
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2g
+    pids_limit: 128
+
+    devices:
+      - /dev/snd:/dev/snd
+      - /dev/gpiochip0:/dev/gpiochip0
+    group_add:
+      - audio
+      - gpio
+
+    volumes:
+      # Models stay outside the image: read-only, replaced without a rebuild.
+      - ${XTRANS_MODELS:-/opt/xtrans/models}:/opt/xtrans/models:ro
