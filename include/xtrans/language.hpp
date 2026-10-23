@@ -64,6 +64,9 @@ class Selector {
   // other language exists, the pair simply swaps.
   void cycle(Button button) noexcept;
 
+  // Flips the speaking direction without touching the selected languages.
+  void swap_direction() noexcept { pair_.swap(); }
+
  private:
   Pair pair_;
   std::span<const Lang> cycle_;

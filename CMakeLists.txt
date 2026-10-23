@@ -25,6 +25,7 @@ endif()
 
 add_library(xtrans STATIC
   src/audio.cpp
+  src/control.cpp
   src/language.cpp
   src/pipeline.cpp
 )
@@ -52,12 +53,21 @@ endif()
 
 enable_testing()
 
-add_executable(xtrans_tests
-  tests/main.cpp
-  tests/test_audio.cpp
-  tests/test_language.cpp
-  tests/test_pipeline.cpp
-)
-target_link_libraries(xtrans_tests PRIVATE xtrans)
+add_executable(xtransd apps/xtransd.cpp)
+target_link_libraries(xtransd PRIVATE xtrans)
+install(TARGETS xtransd RUNTIME DESTINATION bin)
 
-add_test(NAME unit COMMAND xtrans_tests)
+option(XTRANS_BUILD_TESTS "Build the unit tests (host only)" ON)
+
+if(XTRANS_BUILD_TESTS)
+  add_executable(xtrans_tests
+    tests/main.cpp
+    tests/test_audio.cpp
+    tests/test_control.cpp
+    tests/test_language.cpp
+    tests/test_pipeline.cpp
+  )
+  target_link_libraries(xtrans_tests PRIVATE xtrans)
+
+  add_test(NAME unit COMMAND xtrans_tests)
+endif()

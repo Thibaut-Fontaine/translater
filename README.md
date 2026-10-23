@@ -26,9 +26,12 @@ Implemented and tested so far:
   with hysteresis (`include/xtrans/audio.hpp`)
 - the turn state machine: idle → recording → transcribing → translating →
   speaking → idle (`include/xtrans/pipeline.hpp`)
+- controller + line protocol (`include/xtrans/control.hpp`) and the `xtransd`
+  daemon skeleton (`apps/xtransd.cpp`), driven on stdin until the GPIO adapter
+  lands
 
 Not implemented yet: ALSA capture/playback, GPIO buttons, the whisper.cpp,
-NLLB and Piper adapters, the `xtransd` daemon and its systemd unit.
+NLLB and Piper adapters, and the systemd unit.
 
 ## Build and test
 
@@ -46,6 +49,20 @@ cmake -S . -B build-asan -DXTRANS_SANITIZE=address,undefined
 cmake -S . -B build-arm -DCMAKE_TOOLCHAIN_FILE=cmake/aarch64-linux-gnu.cmake \
       -DCMAKE_BUILD_TYPE=Release
 ```
+
+## Container
+
+Two images: a dev/test image and a cross-built arm64 runtime image for the Pi.
+
+```bash
+./scripts/docker.sh --self-test   # compose invariants, no daemon needed
+./scripts/docker.sh test          # build image, run all tests during the build
+./scripts/docker.sh smoke         # run xtransd with scripted input
+./scripts/docker.sh image         # build/xtrans-arm64.tar for the device
+```
+
+See [docs/docker.md](docs/docker.md) for deployment, device passthrough and the
+security posture (non-root, read-only rootfs, no network).
 
 ## Languages
 
