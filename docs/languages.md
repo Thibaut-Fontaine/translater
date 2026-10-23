@@ -7,9 +7,9 @@ Target languages, in order of intended priority. The capability table in
 | --- | --- | --- | --- | --- | --- |
 | French | `fra` | `fra_Latn` | yes (`fr`) | `fr_FR-siwis-medium` | yes |
 | English | `eng` | `eng_Latn` | yes (`en`) | `en_US-lessac-medium` | yes |
-| Thai | `tha` | `tha_Thai` | yes (`th`) | none validated | no |
-| Lao | `lao` | `lao_Laoo` | yes (`lo`) | none validated | no |
-| Hmong | `hmn` | none (NLLB has no `hmn_Latn`) | no | none | no |
+| Thai | `tha` | `tha_Thai` | yes (`th`) | `th_TH-tsync2-medium` exists, unvalidated | no |
+| Lao | `lao` | `lao_Laoo` | yes (`lo`) | **none exists** | no |
+| Hmong | `hmn` | none (NLLB has no `hmn_Latn`) | no | **none exists** | no |
 | Yunnan minority languages | varies | only Tibetan, Jingpho, Shan (see below) | no | none | no |
 
 ### What NLLB-200 actually covers in Southeast Asia
@@ -40,6 +40,22 @@ Consequence for the Yunnan goal: only three of the languages we listed have any
 NLLB coverage — Tibetan, Jingpho and Shan — and all three are cross-border
 languages rather than Yunnan-specific varieties. Everything else in the Yunnan
 set needs a different model, and no sub-1B candidate found so far covers them.
+
+### Piper voice coverage (checked 2026-10-23)
+
+`rhasspy/piper-voices` publishes 178 voices across 58 languages. Relevant facts:
+
+- French and English: several voices each (`fr_FR-siwis-medium`,
+  `en_US-lessac-medium` chosen).
+- Thai: a single voice, `th_TH-tsync2-medium`.
+- Lao: **no voice at all**. Hmong: **no voice at all**.
+- Also available: Vietnamese, Indonesian, Chinese, Japanese, Korean.
+
+Because the device is bidirectional and screenless, a language without a voice
+cannot be a *target*: the translation would have no way to be heard. Lao is
+therefore not a usable output language even though NLLB can translate into it,
+and the same applies to Hmong and the Yunnan languages. Thai becomes usable in
+both directions once its voice is validated on the hardware.
 
 
 A language is **ready** only when all three capabilities are present
