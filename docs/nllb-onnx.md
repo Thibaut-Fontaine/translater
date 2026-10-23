@@ -1,6 +1,7 @@
 # NLLB ONNX — investigation notes
 
-Status: **blocked on model quality, not on our code.** Date: 2026-10-23.
+Status: **resolved.** Date: 2026-10-23. The models were fine; our token ids
+were off by one and the source sequence was missing its EOS terminator.
 
 ## What works
 
@@ -36,7 +37,7 @@ encode and an ORT session in the same process, exit code 0.
 Also note: Debian's ORT prints harmless `Schema error ... already registered`
 lines to stderr at session creation. They are noise, not failures.
 
-### 2. The ONNX decoders produce degenerate output (open)
+### 2. The ONNX decoders produce degenerate output (solved)
 
 With the export from `Xenova/nllb-200-distilled-600M` (revision
 `261c31d1…`), a French translation request returns the target-language token
@@ -62,7 +63,30 @@ token. Two candidate explanations remain:
 2. the exported encoder output is not the tensor this decoder expects (shape is
    right: `[1, 8, 1024]`, float32, mean |x| ≈ 0.29).
 
-## Options
+### Root cause
+
+The reference encoder ids for "Hello, how are you today?" are
+`[256047, 94124, 248079, 11657, 2442, 1259, 30435, 248130, 2]`; ours were
+`[256047, 94123, 248078, 11656, 2441, 1258, 30434, 248129]`. Every SentencePiece
+id is **one lower**, and the trailing `2` (EOS) was missing.
+
+NLLB reserves id 0, so the tokenizer's ids are `sp_id + 1`, and the source
+sequence is `[src_lang] + pieces + [eos]`. Feeding the unshifted ids meant every
+source token looked up the wrong embedding, which is exactly the degenerate
+output observed.
+
+With the offset and the EOS applied:
+
+| Direction | Input | Output |
+| --- | --- | --- |
+| en→fr | "Hello, how are you today?" | "Bonjour, comment allez-vous aujourd'hui ?" |
+| fr→en | "Bonjour, comment allez-vous aujourd'hui ?" | "Hi, how are you today?" |
+
+Both match `transformers.js` running the same files, which was used as the
+reference implementation. Decoding mirrors the shift: ids `< 256000` are
+detokenized as `id - 1`, language/special ids are dropped.
+
+## Options (no longer needed)
 
 - **Export ourselves** with `optimum-cli export onnx` from the official weights.
   Needs the gated `facebook/nllb-200-distilled-600M` and roughly 10 GB disk plus
@@ -76,6 +100,14 @@ token. Two candidate explanations remain:
 - **Change the model**: OPUS-MT fr↔en pairs are small (≈300 MB), CC-BY-4.0,
   and not gated; they would also lift the non-commercial restriction, at the
   cost of one model per language pair. That is an owner decision.
+
+## Adapter rule
+
+`NllbMt` must apply, in this order: `[src_lang_id]`, every SentencePiece piece
+plus one, `[eos]`; decode with `[2]` as the decoder start, force the target
+language token on the first step, stop at EOS, drop ids `>= 256000`, then
+detokenize `id - 1`. Two unit-testable helpers come out of this: the id shift
+and the special-token filter.
 
 ## Artifacts on the workstation
 
