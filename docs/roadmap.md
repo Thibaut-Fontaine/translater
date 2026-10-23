@@ -331,6 +331,14 @@ unit test could reach.
 
 ## M7 — SD image construction (Phase 1)
 
+**Status:** partial. The arm64 container now **builds** with every adapter
+(cross-compiled on the host, no emulation): `xtransd` + `libpiper.so` + the
+espeak-ng data, with linkage verified by `readelf` (no ONNX Runtime in the
+DT_NEEDED list, so the delay-load design holds). Running it under QEMU crashes
+before `main` and even `--help` hangs, so the payload is **not runtime-verified**;
+the image builder and its verification script are not written yet.
+
+
 **Todo, with feasibility**
 
 | Sub-step | Feasible here? | Notes |
