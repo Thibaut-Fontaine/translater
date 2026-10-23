@@ -97,7 +97,6 @@ int main(int argc, char** argv) {
 
   char out[1024];
   std::size_t written = 0;
-  const timespec start{};
   timespec begin{};
   clock_gettime(CLOCK_MONOTONIC, &begin);
   const xtrans::MtStatus status = mt->translate(text, from, to, out, written);
@@ -112,7 +111,6 @@ int main(int argc, char** argv) {
   }
   std::printf("%.*s\n", static_cast<int>(written), out);
   std::fprintf(stderr, "%ld ms, %zu decoder steps\n", ms, mt->last_tokens());
-  (void)start;
   return 0;
 #else
   (void)argc;
