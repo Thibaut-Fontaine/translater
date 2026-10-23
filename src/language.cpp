@@ -12,7 +12,8 @@ constexpr std::array<LangInfo, kLangCount> kTable{{
     {Lang::en, "eng", "eng_Latn", "en", "en_US-lessac-medium", kReady},
     {Lang::th, "tha", "tha_Thai", "th", "", kStt | kMt},
     {Lang::lo, "lao", "lao_Laoo", "lo", "", kStt | kMt},
-    {Lang::hmn, "hmn", "hmn_Latn", "", "", kMt},
+    // NLLB-200 has no Hmong language token; nothing can translate it yet.
+    {Lang::hmn, "hmn", "", "", "", 0},
 }};
 
 constexpr std::array<Lang, 2> kSelectable{Lang::fr, Lang::en};

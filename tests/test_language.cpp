@@ -22,7 +22,7 @@ TEST_CASE(test_language_every_entry_has_stable_codes) {
     const auto& info = lang_info(static_cast<Lang>(i));
     CHECK_EQ(static_cast<std::size_t>(info.id), i);
     CHECK(!info.iso639_3.empty());
-    CHECK(!info.nllb.empty());
+    CHECK_EQ((info.caps & kMt) != 0, !info.nllb.empty());
   }
 }
 
@@ -43,7 +43,7 @@ TEST_CASE(test_language_whisper_does_not_cover_hmong) {
 TEST_CASE(test_language_ready_requires_all_three_capabilities) {
   CHECK_EQ(lang_info(Lang::fr).caps, kReady);
   CHECK_EQ(lang_info(Lang::th).caps, kStt | kMt);
-  CHECK_EQ(lang_info(Lang::hmn).caps, kMt);
+  CHECK_EQ(lang_info(Lang::hmn).caps, 0);
 }
 
 TEST_CASE(test_language_selectable_is_exactly_the_ready_set) {
