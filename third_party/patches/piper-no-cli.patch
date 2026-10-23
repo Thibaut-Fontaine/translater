@@ -1,0 +1,16 @@
+The upstream piper CLI links ONNX Runtime directly. In this project ORT must be
+delay-loaded by the host executable (see src/adapters/ort_delay_load.cpp), so
+the CLI would either pull ORT into the global namespace or fail to link with an
+undefined OrtGetApiBase. We only need libpiper.
+--- a/libpiper/CMakeLists.txt
++++ b/libpiper/CMakeLists.txt
+@@ -244,7 +244,8 @@
+ )
+ 
+ # ---- piper exe ---
+-add_subdirectory(src/main)
++# Disabled: ORT is delay-loaded by our executables, not linked.
++# add_subdirectory(src/main)
+ 
+ # ---- version
+ if(EXISTS ${CMAKE_CURRENT_LIST_DIR}/../setup.py)

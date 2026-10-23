@@ -43,8 +43,12 @@ Implemented and tested so far:
   `models/nllb.pin`; en→fr and fr→en match the reference implementation
 
 `xtransd --device --model FILE --mt-dir DIR` runs recognition and translation
-per turn and logs status and lengths only, never the text. `xtrans-mt` is a
-one-shot translator for benchmarking.
+per turn and logs status and lengths only, never the text. `xtrans-mt` and
+`xtrans-tts` are one-shot tools for benchmarking.
+
+`xtransd --selftest` runs a sentence through the whole chain without hardware:
+Piper synthesises French, Whisper transcribes it, NLLB translates to English,
+Piper speaks the result, and both WAVs are written for inspection.
 
 Not implemented yet: Piper voices, playback, and the systemd unit. Hardware I/O
 is compile-verified but not yet exercised on a Pi. Latency is measured on the

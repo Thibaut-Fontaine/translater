@@ -1,0 +1,18 @@
+[Unit]
+Description=Portable offline voice translator
+Documentation=file:/opt/xtrans/README.md
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/xtrans
+# The stack is offline by construction (network_mode: none); no network target.
+ExecStart=/usr/bin/docker compose -f /opt/xtrans/compose.yaml up -d --remove-orphans
+ExecStop=/usr/bin/docker compose -f /opt/xtrans/compose.yaml down
+TimeoutStartSec=180
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target
