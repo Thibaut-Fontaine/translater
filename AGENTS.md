@@ -47,7 +47,7 @@ See `docs/languages.md`.
 | Item | Value |
 | --- | --- |
 | Board | Raspberry Pi 5 (Cortex-A76, 4× 2.4 GHz, NEON, dotprod, fp16) |
-| OS | Raspberry Pi OS Lite 64-bit (Debian-based), headless |
+| OS | Raspberry Pi OS Lite 64-bit, Debian 13 "trixie" (verified 2026-10-06 image), headless |
 | Toolchain | GCC 12+ / Clang 15+ (`aarch64-linux-gnu` for cross builds) |
 | Build | CMake ≥ 3.22, Ninja on device |
 | Storage | 64 GB microSD, models under `/opt/xtrans/models` |
@@ -199,6 +199,9 @@ adapters            ALSA, libgpiod, whisper.cpp, ONNX Runtime, Piper
 | libgpiod | buttons | system package |
 | Docker | dev/test + device images | `debian:bookworm-slim`, never `latest` |
 
+- Debian packages first: `libonnxruntime-dev`, `libsentencepiece-dev`, and
+  friends come from apt, never from a vendor tarball, when the target release
+  ships them. Vendor only what Debian does not package (whisper.cpp, Piper).
 - Pin versions; record the digest in `third_party/README.md` when adding one.
 - No CMake `FetchContent` at build time on the device; provisioning is a
   separate, documented script.
