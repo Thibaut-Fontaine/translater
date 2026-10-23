@@ -34,6 +34,11 @@ const LangInfo& lang_info(Lang id) noexcept;
 // True when the language has a validated STT, MT and TTS path.
 bool ready(Lang id) noexcept;
 
+// True when a translation between the two languages can be attempted: both
+// sides ready and distinct. The translator adapter must never see a pair that
+// fails this check.
+bool translatable(Lang from, Lang to) noexcept;
+
 // Languages the language buttons may select, in cycle order.
 std::span<const Lang> selectable() noexcept;
 
