@@ -29,9 +29,13 @@ Implemented and tested so far:
 - controller + line protocol (`include/xtrans/control.hpp`) and the `xtransd`
   daemon skeleton (`apps/xtransd.cpp`), driven on stdin until the GPIO adapter
   lands
+- turn engine (`include/xtrans/device.hpp`): button debounce, capture buffer,
+  gate endpointing, silence-turn discard, max-duration cut — tested against
+  fake buttons and fake audio
 
 Not implemented yet: ALSA capture/playback, GPIO buttons, the whisper.cpp,
-NLLB and Piper adapters, and the systemd unit.
+NLLB and Piper adapters, and the systemd unit. See
+[docs/roadmap.md](docs/roadmap.md) for the milestone order.
 
 ## Build and test
 
