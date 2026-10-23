@@ -1,15 +1,21 @@
 # Language support
 
-Target languages, in order of intended priority:
+Target languages, in order of intended priority. The capability table in
+`src/language.cpp` is the source of truth; this document explains it.
 
-| Language | Code (NLLB) | Whisper.cpp STT | Piper TTS | Status |
-| --- | --- | --- | --- | --- |
-| French | `fra_Latn` | yes | yes | planned |
-| English | `eng_Latn` | yes | yes | planned |
-| Thai | `tha_Thai` | partial | yes | to validate |
-| Lao | `lao_Laoo` | partial | limited | to validate |
-| Hmong | `hmn_Latn` (Hmong Daw) | no / unvalidated | no / unvalidated | unknown |
-| Yunnan minority languages | varies | no | no | unknown |
+| Language | ISO 639-3 | NLLB code | Whisper.cpp STT | Piper TTS | Ready |
+| --- | --- | --- | --- | --- | --- |
+| French | `fra` | `fra_Latn` | yes (`fr`) | `fr_FR-siwis-medium` | yes |
+| English | `eng` | `eng_Latn` | yes (`en`) | `en_US-lessac-medium` | yes |
+| Thai | `tha` | `tha_Thai` | yes (`th`) | none validated | no |
+| Lao | `lao` | `lao_Laoo` | yes (`lo`) | none validated | no |
+| Hmong | `hmn` | `hmn_Latn` | no | none | no |
+| Yunnan minority languages | varies | varies | no | no | no |
+
+A language is **ready** only when all three capabilities are present
+(`kStt | kMt | kTts`). Ready languages, and only those, appear in the button
+cycle (`selectable()`).
+
 
 ## What has to be validated
 
@@ -31,5 +37,5 @@ Each language needs three independent pieces, and all three must exist for the p
   models hold up.
 - Hmong and Yunnan minority languages are research items, not deliverables. They should be
   treated as best-effort and may require different STT/TTS models than Whisper/Piper.
-- The language list in the UI (button cycles) should be generated from a validated-support
-  matrix, so an unsupported language is never offered silently.
+- The language list in the UI (button cycles) is generated from the capability
+  table, so an unsupported language is never offered silently.

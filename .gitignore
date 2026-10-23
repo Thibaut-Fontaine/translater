@@ -20,3 +20,9 @@ venv/
 .vscode/
 .idea/
 .DS_Store
+
+# Build trees
+build*/
+compile_commands.json
+*.gcda
+*.gcno

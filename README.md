@@ -15,8 +15,37 @@ The system works in both directions: a button switches between **A → B** and *
 
 ## Status
 
-Early project preparation. No pipeline code yet — see [docs/](docs/) for the current
-design notes.
+Early project preparation. The core is C++20, built test-first; see
+[AGENTS.md](AGENTS.md) for the rules every change follows.
+
+Implemented and tested so far:
+
+- language capability table, pair selection and button cycling
+  (`include/xtrans/language.hpp`)
+- 16 kHz PCM level measurement, lock-free SPSC sample ring, voice-activity gate
+  with hysteresis (`include/xtrans/audio.hpp`)
+- the turn state machine: idle → recording → transcribing → translating →
+  speaking → idle (`include/xtrans/pipeline.hpp`)
+
+Not implemented yet: ALSA capture/playback, GPIO buttons, the whisper.cpp,
+NLLB and Piper adapters, the `xtransd` daemon and its systemd unit.
+
+## Build and test
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build -j"$(nproc)"
+ctest --test-dir build --output-on-failure
+```
+
+Release, sanitizers and cross-compilation for the Pi:
+
+```bash
+cmake -S . -B build-rel -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B build-asan -DXTRANS_SANITIZE=address,undefined
+cmake -S . -B build-arm -DCMAKE_TOOLCHAIN_FILE=cmake/aarch64-linux-gnu.cmake \
+      -DCMAKE_BUILD_TYPE=Release
+```
 
 ## Languages
 
