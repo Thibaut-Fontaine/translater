@@ -29,6 +29,8 @@ find_path(XTRANS_ALSA_INCLUDE_DIR alsa/asoundlib.h)
 find_library(XTRANS_ALSA_LIBRARY asound)
 find_path(XTRANS_GPIOD_INCLUDE_DIR gpiod.h)
 find_library(XTRANS_GPIOD_LIBRARY gpiod)
+find_path(XTRANS_ORT_INCLUDE_DIR onnxruntime/onnxruntime_cxx_api.h)
+find_library(XTRANS_SENTENCEPIECE_LIBRARY sentencepiece)
 find_package(Threads REQUIRED)
 
 if(XTRANS_ALSA_INCLUDE_DIR AND XTRANS_ALSA_LIBRARY)
@@ -42,8 +44,15 @@ else()
   set(XTRANS_GPIOD_DEFAULT OFF)
 endif()
 
+if(XTRANS_ORT_INCLUDE_DIR AND XTRANS_SENTENCEPIECE_LIBRARY)
+  set(XTRANS_NLLB_DEFAULT ON)
+else()
+  set(XTRANS_NLLB_DEFAULT OFF)
+endif()
+
 option(XTRANS_WITH_ALSA "Build the ALSA capture/playback adapters" ${XTRANS_ALSA_DEFAULT})
 option(XTRANS_WITH_GPIOD "Build the libgpiod button adapter" ${XTRANS_GPIOD_DEFAULT})
+option(XTRANS_WITH_NLLB "Build the NLLB translation adapter" ${XTRANS_NLLB_DEFAULT})
 
 
 add_library(xtrans STATIC
@@ -52,6 +61,7 @@ add_library(xtrans STATIC
   src/control.cpp
   src/device.cpp
   src/language.cpp
+  src/nllb_ids.cpp
   src/pipeline.cpp
   src/recorder.cpp
   src/text.cpp
@@ -85,6 +95,21 @@ if(XTRANS_WITH_GPIOD)
 else()
   target_compile_definitions(xtrans PUBLIC XTRANS_WITH_GPIOD=0)
   message(STATUS "GPIO adapter: disabled (libgpiod-dev not found)")
+endif()
+
+if(XTRANS_WITH_NLLB)
+  target_sources(xtrans PRIVATE src/adapters/nllb.cpp src/adapters/ort_delay_load.cpp)
+  target_include_directories(xtrans PRIVATE "${XTRANS_ORT_INCLUDE_DIR}")
+  target_link_libraries(xtrans PUBLIC "${XTRANS_SENTENCEPIECE_LIBRARY}" ${CMAKE_DL_LIBS})
+  target_compile_definitions(xtrans PUBLIC XTRANS_WITH_NLLB=1)
+  # ONNX Runtime's C++ API throws. This is the only place exceptions are
+  # enabled; the adapter catches at its boundary and returns MtStatus.
+  set_source_files_properties(src/adapters/nllb.cpp src/adapters/ort_delay_load.cpp
+    PROPERTIES COMPILE_OPTIONS "-fexceptions")
+  message(STATUS "NLLB adapter: enabled (ONNX Runtime from ${XTRANS_ORT_INCLUDE_DIR})")
+else()
+  target_compile_definitions(xtrans PUBLIC XTRANS_WITH_NLLB=0)
+  message(STATUS "NLLB adapter: disabled (libonnxruntime-dev / libsentencepiece-dev not found)")
 endif()
 
 # whisper.cpp STT adapter. The tree is vendored by scripts/fetch_third_party.sh
@@ -133,6 +158,10 @@ add_executable(xtransd apps/xtransd.cpp)
 target_link_libraries(xtransd PRIVATE xtrans)
 install(TARGETS xtransd RUNTIME DESTINATION bin)
 
+add_executable(xtrans-mt apps/xtrans-mt.cpp)
+target_link_libraries(xtrans-mt PRIVATE xtrans)
+install(TARGETS xtrans-mt RUNTIME DESTINATION bin)
+
 option(XTRANS_BUILD_TESTS "Build the unit tests (host only)" ON)
 
 if(XTRANS_BUILD_TESTS)
@@ -143,6 +172,7 @@ if(XTRANS_BUILD_TESTS)
     tests/test_control.cpp
     tests/test_device.cpp
     tests/test_language.cpp
+    tests/test_nllb.cpp
     tests/test_pipeline.cpp
     tests/test_recorder.cpp
     tests/test_text.cpp

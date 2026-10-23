@@ -1,5 +1,7 @@
-# Models and build artifacts (downloaded on the device, not in git)
-models/
+# Models and build artifacts (downloaded on the device, not in git).
+# Pins are tracked; the weights are not.
+models/*
+!models/*.pin
 *.bin
 *.gguf
 *.onnx
@@ -31,5 +33,6 @@ compile_commands.json
 third_party/whisper.cpp/
 third_party/downloads/
 
-# Models and voice files
-models/
+# Models and voice files (pins are tracked, the weights are not)
+models/*
+!models/*.pin

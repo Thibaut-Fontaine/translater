@@ -104,3 +104,18 @@ TEST_CASE(test_language_only_ready_pairs_are_translatable) {
   CHECK(!translatable(Lang::hmn, Lang::en));
   CHECK(!translatable(Lang::lo, Lang::hmn));
 }
+
+TEST_CASE(test_language_nllb_ids_match_the_published_tokenizer) {
+  CHECK_EQ(lang_info(Lang::en).nllb_id, 256047);
+  CHECK_EQ(lang_info(Lang::fr).nllb_id, 256057);
+  CHECK_EQ(lang_info(Lang::lo).nllb_id, 256100);
+  CHECK_EQ(lang_info(Lang::th).nllb_id, 256175);
+  CHECK_EQ(lang_info(Lang::hmn).nllb_id, 0);
+}
+
+TEST_CASE(test_language_mt_capability_requires_an_nllb_id) {
+  for (std::size_t i = 0; i < kLangCount; ++i) {
+    const auto& info = lang_info(static_cast<Lang>(i));
+    CHECK_EQ((info.caps & kMt) != 0, info.nllb_id != 0);
+  }
+}

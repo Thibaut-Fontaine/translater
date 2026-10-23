@@ -4,15 +4,18 @@
 //   --stdin   control lines on stdin (default; no hardware needed)
 //   --device  real buttons and microphone via libgpiod and ALSA
 //
-// The device mode currently records a turn and reports it, then aborts the
-// pipeline: the STT/MT/TTS adapters land in the next milestones.
+// Device mode runs the turn through the adapters that were built in: capture,
+// speech recognition and (optionally) translation. Piper playback is the last
+// stage still missing, so a turn ends after MT until M5 lands.
 #include <array>
 #include <csignal>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "xtrans/control.hpp"
@@ -29,6 +32,11 @@
 #include "xtrans/adapters/whisper.hpp"
 #endif
 
+#if XTRANS_WITH_NLLB
+#include "xtrans/adapters/nllb.hpp"
+#include "xtrans/mt.hpp"
+#endif
+
 namespace {
 
 volatile std::sig_atomic_t g_stop = 0;
@@ -37,7 +45,7 @@ extern "C" void handle_signal(int) { g_stop = 1; }
 
 void usage(const char* argv0) {
   std::printf(
-      "usage: %s [--stdin | --device [--model FILE] | --help]\n"
+      "usage: %s [--stdin | --device [--model FILE] [--mt-dir DIR] | --help]\n"
       "\n"
       "  --stdin   read control lines (press|release|abort|lang-a|lang-b|swap|"
       "quit)\n"
@@ -45,6 +53,7 @@ void usage(const char* argv0) {
       "  --device  use the real buttons and microphone; each finished turn is\n"
       "            reported with its sample count and duration\n"
       "  --model   whisper.cpp model for speech recognition (device mode only)\n"
+      "  --mt-dir  directory holding the NLLB ONNX files and the tokenizer\n"
       "\n"
       "Exits on EOF (--stdin), SIGINT or SIGTERM.\n",
       argv0);
@@ -87,7 +96,7 @@ int run_stdin() {
   return 0;
 }
 
-int run_device(const char* model_path) {
+int run_device(const char* model_path, const char* mt_dir) {
 #if XTRANS_WITH_ALSA && XTRANS_WITH_GPIOD
   std::string error;
 
@@ -121,6 +130,38 @@ int run_device(const char* model_path) {
   }
 #endif
 
+  std::unique_ptr<xtrans::Mt> mt;
+#if XTRANS_WITH_NLLB
+  if (mt_dir != nullptr) {
+    char encoder[512];
+    char decoder[512];
+    char decoder_with_past[512];
+    char tokenizer[512];
+    std::snprintf(encoder, sizeof encoder, "%s/encoder_model_int8.onnx", mt_dir);
+    std::snprintf(decoder, sizeof decoder, "%s/decoder_model_quantized.onnx", mt_dir);
+    std::snprintf(decoder_with_past, sizeof decoder_with_past,
+                  "%s/decoder_with_past_model_quantized.onnx", mt_dir);
+    std::snprintf(tokenizer, sizeof tokenizer, "%s/sentencepiece.bpe.model", mt_dir);
+
+    xtrans::NllbConfig config;
+    config.encoder = encoder;
+    config.decoder = decoder;
+    config.decoder_with_past = decoder_with_past;
+    config.tokenizer = tokenizer;
+    auto nllb = xtrans::NllbMt::open(config, error);
+    if (!nllb) {
+      std::fprintf(stderr, "xtransd: mt: %s\n", error.c_str());
+      return 3;
+    }
+    mt = std::move(nllb);
+  }
+#else
+  if (mt_dir != nullptr) {
+    std::fputs("xtransd: built without ONNX Runtime/NLLB (no --mt-dir support)\n", stderr);
+    return 3;
+  }
+#endif
+
   // 15 s of 16 kHz mono: the turn cap from AGENTS.md §6, allocated once.
   std::vector<std::int16_t> capture(xtrans::kSampleRate * 15);
   xtrans::Device device(*buttons, *audio, capture);
@@ -142,15 +183,27 @@ int run_device(const char* model_path) {
       std::fflush(stdout);
 
       if (stt && !turn.empty()) {
-        std::array<char, 1024> text{};
+        const xtrans::Pair& pair = device.controller().selector().pair();
+        std::array<char, 1024> transcript{};
         std::size_t written = 0;
-        const xtrans::SttStatus status =
-            stt->transcribe(turn, device.controller().selector().pair().from(), text, written);
+        const xtrans::SttStatus status = stt->transcribe(turn, pair.from(), transcript, written);
         // Transcript content stays private: log the outcome, not the words.
         std::printf("stt status=%d chars=%zu\n", static_cast<int>(status), written);
         std::fflush(stdout);
         device.controller().pipeline().complete(xtrans::Stage::stt,
                                                status == xtrans::SttStatus::ok);
+
+        if (mt && status == xtrans::SttStatus::ok && written != 0) {
+          std::array<char, 1024> translated{};
+          std::size_t translated_size = 0;
+          const xtrans::MtStatus mt_status = mt->translate(
+              std::string_view(transcript.data(), written), pair.from(), pair.to(), translated,
+              translated_size);
+          std::printf("mt status=%d chars=%zu\n", static_cast<int>(mt_status), translated_size);
+          std::fflush(stdout);
+          device.controller().pipeline().complete(xtrans::Stage::mt,
+                                                 mt_status == xtrans::MtStatus::ok);
+        }
       }
       device.controller().pipeline().abort();  // until MT/TTS exist
     }
@@ -159,6 +212,7 @@ int run_device(const char* model_path) {
   return 0;
 #else
   (void)model_path;
+  (void)mt_dir;
   std::fputs("xtransd: built without ALSA/GPIO adapters (use --stdin)\n", stderr);
   return 3;
 #endif
@@ -169,6 +223,7 @@ int run_device(const char* model_path) {
 int main(int argc, char** argv) {
   bool device = false;
   const char* model_path = nullptr;
+  const char* mt_dir = nullptr;
   for (int i = 1; i < argc; ++i) {
     if (std::strcmp(argv[i], "--help") == 0) {
       usage(argv[0]);
@@ -183,13 +238,17 @@ int main(int argc, char** argv) {
       model_path = argv[++i];
       continue;
     }
+    if (std::strcmp(argv[i], "--mt-dir") == 0 && i + 1 < argc) {
+      mt_dir = argv[++i];
+      continue;
+    }
     std::fprintf(stderr, "xtransd: unknown argument '%s' (try --help)\n", argv[i]);
     return 2;
   }
 
   std::signal(SIGINT, handle_signal);
   std::signal(SIGTERM, handle_signal);
-  if (device) return run_device(model_path);
+  if (device) return run_device(model_path, mt_dir);
 
   std::signal(SIGPIPE, SIG_IGN);
   return run_stdin();

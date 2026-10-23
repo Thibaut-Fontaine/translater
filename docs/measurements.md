@@ -28,4 +28,20 @@ Reading:
 - q5_1 being 2.6× slower here is a host artefact (no optimized quantized dot
   product on this CPU). Do not generalize it; measure on the Pi.
 
+## MT — NLLB-200 int8 encoder/decoder pair
+
+Date: 2026-10-23. Host as above, ONNX Runtime 1.21 (Debian), 4 intra-op
+threads, KV cache with `decoder_model_quantized` + `decoder_with_past_model_quantized`.
+
+| Input | Decoder steps | Wall time | Output |
+| --- | --- | --- | --- |
+| "Hi" (en→fr) | 6 | 4.4 s | "Salut" |
+| "Hello, how are you today?" (en→fr) | 12 | 6.6 s | "Bonjour, comment allez-vous aujourd'hui ?" |
+| "Bonjour, comment allez-vous aujourd hui ?" (fr→en) | 8 | 4.9 s | "Hi, how are you today?" |
+
+Cost is ~550–730 ms per decoder step, so it scales with output length, not
+input length. This host has no VNNI; the Pi 5 with NEON dotprod may differ in
+either direction. If the Pi confirms this order of magnitude, the MT stage
+needs a different runtime (CTranslate2) or the latency budget needs revisiting.
+
 Pi 5 numbers go here as soon as the device can run `xtransd --device --model`.
