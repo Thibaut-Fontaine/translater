@@ -15,48 +15,26 @@ The system works in both directions: a button switches between **A → B** and *
 
 ## Status
 
-Early project preparation. The core is C++20, built test-first; see
-[AGENTS.md](AGENTS.md) for the rules every change follows.
+The pipeline is complete and tested on the host; the device image builds and
+verifies; **nothing has been booted on a Raspberry Pi yet** (M9 in
+[docs/roadmap.md](docs/roadmap.md)).
 
-Implemented and tested so far:
+| Piece | State |
+| --- | --- |
+| Core (language table, gamma gate, ring, turn engine, state machine) | done, unit-tested |
+| whisper.cpp STT | works with a real model |
+| NLLB-200 int8 MT with KV cache | en→fr and fr→en verified against the reference |
+| Piper TTS | fr/en verified, WAVs compared |
+| Full chain `--selftest` | passes on x86 and on arm64 (under QEMU) |
+| ALSA capture/playback, GPIO buttons | compiled; never run on hardware |
+| arm64 container | built, selftest passes emulated |
+| SD image (6 GB) | built and verified (14 checks) |
+| Flasher | refuses unsafe targets; verifies by read-back |
+| Latency vs the 1.6 s target | unproven; needs the Pi |
 
-- language capability table, pair selection and button cycling
-  (`include/xtrans/language.hpp`)
-- 16 kHz PCM level measurement, lock-free SPSC sample ring, voice-activity gate
-  with hysteresis (`include/xtrans/audio.hpp`)
-- the turn state machine: idle → recording → transcribing → translating →
-  speaking → idle (`include/xtrans/pipeline.hpp`)
-- controller + line protocol (`include/xtrans/control.hpp`) and the `xtransd`
-  daemon skeleton (`apps/xtransd.cpp`), driven on stdin until the GPIO adapter
-  lands
-- turn engine (`include/xtrans/device.hpp`): button debounce, capture buffer,
-  gate endpointing, silence-turn discard, max-duration cut — tested against
-  fake buttons and fake audio
-- ALSA capture/playback and libgpiod buttons (`include/xtrans/adapters/`),
-  compiled with `-Werror` in the dev image; `xtransd --device` runs them,
-  `--stdin` stays the default
-- speech recognition: pinned whisper.cpp behind the `Stt` port
-  (`include/xtrans/stt.hpp`, `WhisperStt`), model loaded once, transcripts
-  assembled in a bounded UTF-8 buffer
-- translation: NLLB-200-distilled-600M int8 ONNX behind the `Mt` port
-  (`include/xtrans/adapters/nllb.hpp`), KV-cached decoder, pinned by SHA-256 in
-  `models/nllb.pin`; en→fr and fr→en match the reference implementation
-
-`xtransd --device --model FILE --mt-dir DIR` runs recognition and translation
-per turn and logs status and lengths only, never the text. `xtrans-mt` and
-`xtrans-tts` are one-shot tools for benchmarking.
-
-`xtrans-install --image FILE --device NAME` writes an SD card and verifies it
-byte for byte; it refuses fixed disks, mounted targets and images that do not
-fit (`--dry-run` runs the checks only).
-
-`xtransd --selftest` runs a sentence through the whole chain without hardware:
-Piper synthesises French, Whisper transcribes it, NLLB translates to English,
-Piper speaks the result, and both WAVs are written for inspection.
-
-Not implemented yet: Piper voices, playback, and the systemd unit. Hardware I/O
-is compile-verified but not yet exercised on a Pi. Latency is measured on the
-host only. See [docs/roadmap.md](docs/roadmap.md) for the milestone order.
+Not implemented: Thai speech output (its voice needs a Piper ≥ 1.9 frontend),
+Hmong and Yunnan minority languages (no model coverage — see the
+[language coverage](#language-coverage-whisper-vs-piper-vs-nllb-200) table).
 
 ## Build and test
 
@@ -66,7 +44,7 @@ cmake --build build -j"$(nproc)"
 ctest --test-dir build --output-on-failure
 ```
 
-Release, sanitizers and cross-compilation for the Pi:
+Release, sanitizers and cross-compilation:
 
 ```bash
 cmake -S . -B build-rel -DCMAKE_BUILD_TYPE=Release
@@ -75,32 +53,100 @@ cmake -S . -B build-arm -DCMAKE_TOOLCHAIN_FILE=cmake/aarch64-linux-gnu.cmake \
       -DCMAKE_BUILD_TYPE=Release
 ```
 
-## Container
+Unit tests never touch audio, GPIO or a model. `xtransd --selftest` is the
+integration check: it synthesises French, transcribes it, translates to English,
+speaks the result and writes both WAVs.
 
-Two images: a dev/test image and a cross-built arm64 runtime image for the Pi.
+## Deploy on a Raspberry Pi 5
+
+### What you need
+
+- Raspberry Pi 5 (8 GB recommended), microSD card **≥ 8 GB**, card reader.
+- USB-C PD battery, USB microphone, 2–3 W amplifier + speaker.
+- Three momentary buttons wired between **BCM 17 / 27 / 22** and **GND**
+  (internal pull-ups are enabled in software).
+- A Linux workstation with Docker + buildx and **~15 GB free**.
+- No QEMU is needed to *build*: the arm64 container is cross-compiled on the
+  host CPU. QEMU/binfmt is only needed if you want to run it under emulation.
+
+### 1. Fetch the pinned sources and models (~2 GB download)
 
 ```bash
-./scripts/docker.sh --self-test   # compose invariants, no daemon needed
-./scripts/docker.sh test          # build image, run all tests during the build
-./scripts/docker.sh smoke         # run xtransd with scripted input
-./scripts/docker.sh image         # build/xtrans-arm64.tar for the device
+git clone https://github.com/Thibaut-Fontaine/translater.git
+cd translater
+scripts/fetch_third_party.sh    # whisper.cpp + Piper sources (pinned commits)
+scripts/fetch_models.sh         # NLLB int8 + whisper model + fr/en/th voices
 ```
 
-See [docs/docker.md](docs/docker.md) for deployment, device passthrough and the
-security posture (non-root, read-only rootfs, no network).
-
-## SD image
+### 2. Build the arm64 container
 
 ```bash
-scripts/fetch_models.sh          # pinned NLLB, whisper and Piper files
-scripts/build_image.sh           # pinned Pi OS base + container + models
+./scripts/docker.sh image       # cross-builds and loads xtrans:arm64
+```
+
+Optional check, emulated, ~16 minutes:
+
+```bash
+docker run --rm --platform linux/arm64 \
+  -v "$PWD/models/nllb:/nllb:ro" -v "$PWD/models/voices:/voices:ro" \
+  -v "$PWD/models/ggml-base.bin:/whisper.bin:ro" xtrans:arm64 \
+  xtransd --selftest --model /whisper.bin --mt-dir /nllb --voice-dir /voices \
+    --espeak-data /opt/xtrans/espeak-ng-data --out /tmp
+```
+
+### 3. Build the SD image (~10 minutes, no root)
+
+```bash
+./scripts/build_image.sh
+```
+
+It downloads the pinned Raspberry Pi OS Lite base, grows the partition, writes
+the payload with `debugfs` and verifies the result — all without mounting
+anything or requiring sudo. Output: `build/image/xtrans.img` (6 GB).
+
+### 4. Flash the card
+
+```bash
+lsblk                                            # find the card, e.g. sdb
 ./build/xtrans-install --image build/image/xtrans.img --device sdb
 ```
 
-`build_image.sh` needs no root: it grows the partition and writes the payload
-with `e2fsck`/`resize2fs`/`debugfs` inside a container, without mounting
-anything. `xtrans-install` refuses fixed disks, mounted targets and images that
-do not fit, then verifies the card byte for byte.
+The tool refuses fixed disks, mounted targets and images that do not fit, asks
+you to type the device name, then verifies the card byte for byte. Cards larger
+than 6 GB keep the extra space unused (the image is not grown on boot).
+
+### 5. First boot
+
+Insert the card, connect the battery, wait for the spoken **"Prêt."**. No
+screen, keyboard or network is used. Under the hood: `containerd` starts,
+`docker` starts with networking and iptables disabled (`network_mode: none`),
+a one-shot unit loads the embedded container image, then `xtrans.service` runs
+`docker compose up -d`.
+
+Useful checks over SSH or a serial console:
+
+```bash
+journalctl -u xtrans -f
+systemctl status containerd docker xtrans
+docker ps                       # container "xtrans", restart unless-stopped
+```
+
+Troubleshooting: if the prompt never plays, check `journalctl -u xtrans` first;
+the container logs `ready`, then one line per turn (`stt status=`, `mt status=`,
+`tts status=`) without ever printing the transcript or translation.
+
+## Container (development)
+
+The dev image is for tests and benchmarks; the arm64 image is what ships.
+
+```bash
+./scripts/docker.sh --self-test   # compose invariants, no daemon needed
+./scripts/docker.sh test          # build dev image, run the whole suite in it
+./scripts/docker.sh smoke         # xtransd with scripted stdin
+```
+
+See [docs/docker.md](docs/docker.md) for the security posture (non-root,
+read-only rootfs, no network) and the model layout.
 
 ## Languages
 

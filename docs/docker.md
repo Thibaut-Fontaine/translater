@@ -7,7 +7,7 @@ Two images, one script:
 | `xtrans-dev` | `docker/Dockerfile.dev` | Reproducible build + `ctest` on any host |
 | `xtrans:arm64` | `docker/Dockerfile` | The runtime that ships to the Pi |
 
-Both are based on `debian:bookworm-slim`; nothing is fetched at runtime.
+Both are based on `debian:trixie-slim`; nothing is fetched at runtime.
 
 ```bash
 ./scripts/docker.sh --self-test   # checks the compose invariants, no daemon needed
@@ -42,8 +42,9 @@ docker run --rm -v "$PWD:/src" -w /src xtrans-dev sh -c '
 1. **build** runs on `$BUILDPLATFORM` (the host) and cross-compiles with
    `cmake/aarch64-linux-gnu.cmake` (`-march=armv8.2-a+dotprod+fp16`), then
    strips the binary. No QEMU is involved in producing the image.
-2. **runtime** is `debian:bookworm-slim` plus `libasound2`, `libgpiod2` and
-   `tini`, with `/usr/local/bin/xtransd` as the only project payload.
+2. **runtime** is `debian:trixie-slim` plus `libasound2t64`, `libgpiod3`,
+   `libonnxruntime1.21`, `libsentencepiece0`, `libgomp1` and `tini`, with
+   `xtransd`, `libpiper.so` and the espeak-ng data as the project payload.
 
 The container runs as uid 10001 (`xtrans`, no shell), not as root. The root
 filesystem is read-only, all capabilities are dropped, and there is no network
@@ -115,7 +116,7 @@ executes at boot.
 
 ## Rules
 
-- Pin the base image by tag (`bookworm-slim`), never `latest`.
+- Pin the base image by tag (`trixie-slim`), never `latest`.
 - No `apt upgrade`, no package added to the runtime stage without a reason
   written in the Dockerfile.
 - The image must build without network access to the *project* (no

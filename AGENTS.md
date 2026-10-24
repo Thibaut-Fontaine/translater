@@ -20,7 +20,13 @@ the result. Pressing the language button swaps direction (A↔B).
 Target languages: French, English, Thai, Lao, Hmong, and selected Yunnan
 minority languages. Only languages whose **recognizer, translator, and voice**
 are all validated may be offered by the UI; today that is French and English.
-See `docs/languages.md`.
+See `docs/languages.md` and `docs/language-matrix.md`.
+
+**Current state (2026-10-24):** the whole pipeline works on the host, the arm64
+container passes `xtransd --selftest` under QEMU, and `scripts/build_image.sh`
+produces a verified 6 GB SD image. **Nothing has booted on a Pi yet.** Audio,
+GPIO, latency against the 1.6 s target and thermals are M9 in
+`docs/roadmap.md`. Do not describe the device as working until M9 runs.
 
 ## 2. Non-negotiables
 
@@ -65,6 +71,8 @@ apps/              daemon binaries, wiring only
 tests/             unit tests + minimal harness, no external test framework
 cmake/             toolchain files, packaging helpers
 docker/            dev/test image, runtime image, compose stack
+docker/image/      SD image provisioner, verifier, systemd units
+images/            pinned Raspberry Pi OS / Docker / Compose versions
 scripts/           shell front-ends, each with a --self-test mode
 docs/              design notes that are not code
 third_party/       pinned vendored sources (never edited in place)
@@ -187,6 +195,17 @@ adapters            ALSA, libgpiod, whisper.cpp, ONNX Runtime, Piper
   `press()`, `release()`, `abort()`, `complete(stage, status)`.
 - Adapters are thin: they translate bytes and status, nothing else.
 - Model loading happens once at startup in `apps/`, not on first utterance.
+- **Nothing links ONNX Runtime.** ORT embeds protobuf 3.14, which crashes
+  libsentencepiece's descriptor registration against the system protobuf.
+  ORT is delay-loaded: `src/adapters/ort_delay_load.cpp` defines
+  `OrtGetApiBase()` and `dlopen`s the library with `RTLD_DEEPBIND`; that object
+  is linked into **every** executable (`xtrans_ort_loader` OBJECT library).
+  The CMake target `onnxruntime::onnxruntime` is interface-only on purpose.
+  Breaking this invariant reproduces a startup segfault.
+- Vendored code is patched only through `third_party/patches/`, applied by
+  `scripts/fetch_third_party.sh`: Piper's version read, its ONNX Runtime 1.22
+  API use, the CLI target, and cross-compiler forwarding for espeak-ng and
+  open_jtalk.
 
 ## 9. External components
 
@@ -197,7 +216,9 @@ adapters            ALSA, libgpiod, whisper.cpp, ONNX Runtime, Piper
 | Piper | TTS | one ONNX voice per validated language |
 | ALSA (`libasound2`) | capture/playback | system package |
 | libgpiod | buttons | system package |
-| Docker | dev/test + device images | `debian:bookworm-slim`, never `latest` |
+| Docker | dev/test + device images | `debian:trixie-slim`, never `latest` |
+| Raspberry Pi OS Lite | SD base | pinned in `images/raspios.pin` |
+| Docker static + Compose plugin | device runtime | pinned in `images/raspios.pin` |
 
 - Debian packages first: `libonnxruntime-dev`, `libsentencepiece-dev`, and
   friends come from apt, never from a vendor tarball, when the target release
@@ -212,14 +233,26 @@ adapters            ALSA, libgpiod, whisper.cpp, ONNX Runtime, Piper
 
 ## 10. Runtime deployment
 
-- `xtransd.service` runs as user `xtrans`, `Restart=on-failure`, `Nice=-5`,
-  `IOSchedulingClass=realtime`; no root at runtime.
-- Container deployment is supported as an alternative: cross-built arm64 image
-  (`docker/Dockerfile`), rootless uid 10001, read-only rootfs, `network_mode:
-  none`, models mounted read-only from `/opt/xtrans/models`, `/dev/snd` and
-  `/dev/gpiochip0` passed through. See `docs/docker.md`. The two deployment
-  paths must stay feature-equivalent; never ship a container that needs the
-  network to start.
+- **Shipping path:** an SD image assembled by `scripts/build_image.sh` from a
+  pinned Raspberry Pi OS Lite base, the cross-built `xtrans:arm64` container and
+  the pinned models. The builder never mounts or loop-mounts anything: it grows
+  the partition table, extracts partition 2 with `dd`, runs
+  `e2fsck`/`resize2fs`/`debugfs` on it as a file inside a trixie container, and
+  writes it back. That is deliberate — trixie images use the `orphan_file` ext4
+  feature that older hosts cannot read, and Docker Desktop VMs expose no loop
+  partitions. Do not replace this with mount-based provisioning.
+- On the device: `containerd` → `docker` (started with `--iptables=false
+  --bridge=none`) → `xtrans-firstboot.service` (loads the embedded image once) →
+  `xtrans.service` (`docker compose up -d`). The container runs as uid 10001
+  with a read-only rootfs, `network_mode: none`, `/dev/snd` and `/dev/gpiochip0`
+  passed through, models read-only under `/opt/xtrans/models`. See
+  `docs/docker.md`.
+- Never ship a container that needs the network to start. The image is
+  verified before flashing (14 checks: container tar, models, voices, dockerd,
+  compose plugin, units enabled).
+- `xtrans-install` is the only sanctioned way to write a card: it refuses
+  fixed disks, mounted targets and images that do not fit, and verifies by
+  read-back. Never document `dd` as an alternative.
 - Buttons come from `/dev/gpiochip*` via the `gpio` group.
 - Audio via ALSA `default` device; the config file is generated at provisioning,
   not committed with machine-specific card indices.
@@ -244,6 +277,8 @@ A change is done when:
 - [ ] New logic has a boundary/failure test, not only a happy path.
 - [ ] No allocation, lock, or logging was added to a hot path.
 - [ ] `docs/` updated if a decision, budget, or validated language changed.
+- [ ] If the image path changed: `scripts/build_image.sh` verifies, and the
+      README deploy steps still match the scripts.
 - [ ] Commit message follows §5, no unrelated changes mixed in.
 
 ## 13. Ask before
