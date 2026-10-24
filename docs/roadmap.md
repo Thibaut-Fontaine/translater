@@ -355,6 +355,11 @@ The lesson: when the filesystem is newer than the host, treat it as a **file**
 and use the matching userspace tools from a container. That also removed the
 sudo requirement entirely.
 
+**One trap found at the end:** Docker's static tarball does **not** include the
+`compose` CLI plugin, but the unit runs `docker compose`. The plugin is now
+pinned separately (v5.6.1, SHA-256) and installed at
+`/usr/local/lib/docker/cli-plugins/docker-compose`; the verifier checks it.
+
 **Known limits:** the image is a fixed 6 GB and is not grown to the card on
 first boot (a 32 GB card keeps ~26 GB unpartitioned); booting it has not been
 tested (M9). Disk usage on this workstation is 97 %, so rebuilds need the old
