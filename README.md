@@ -208,7 +208,7 @@ Whisper (speech in), NLLB-200 (translation), Piper (speech out). Counts verified
   **100 languages**, including Lao (`lo`), Thai (`th`), Tibetan (`bo`), but no
   Hmong, Jingpho or Shan.
 - **Piper** — [voice repository](https://huggingface.co/rhasspy/piper-voices):
-  **178 voices across 58 languages**. The upstream
+  **178 voices across 53 languages**. The upstream
   [VOICES.md](https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/VOICES.md)
   lists only 44 and omits Thai, so the repository is what we use.
 - **NLLB-200** — [FLORES-200](https://github.com/facebookresearch/flores/blob/main/flores200/README.md):
@@ -230,7 +230,6 @@ Whisper (speech in), NLLB-200 (translation), Piper (speech out). Counts verified
 | Tibetan | `bo` | `bod_Tibt` | **no voice** | no |
 | Jingpho (Kachin) | **no** | `kac_Latn` | **no voice** | no |
 | Shan | **no** | `shn_Mymr` | **no voice** | no |
-| Hmong | **no** | **no** | **no voice** | no |
 
 What this means for the device:
 
@@ -246,7 +245,8 @@ What this means for the device:
   only Tibetan, Jingpho and Shan — cross-border varieties, not the full set.
   No model evaluated (NLLB, SMaLL-100, Sailor, Qwen 0.5B) covers Hmong.
 
-Full per-source lists: [docs/languages.md](docs/languages.md).
+The full matrix of every language covered by at least one of the three stacks is in [docs/language-matrix.md](docs/language-matrix.md); per-language project decisions
+are in [docs/languages.md](docs/languages.md).
 
 ## License
 
