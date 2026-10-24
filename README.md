@@ -89,6 +89,19 @@ Two images: a dev/test image and a cross-built arm64 runtime image for the Pi.
 See [docs/docker.md](docs/docker.md) for deployment, device passthrough and the
 security posture (non-root, read-only rootfs, no network).
 
+## SD image
+
+```bash
+scripts/fetch_models.sh          # pinned NLLB, whisper and Piper files
+scripts/build_image.sh           # pinned Pi OS base + container + models
+./build/xtrans-install --image build/image/xtrans.img --device sdb
+```
+
+`build_image.sh` needs no root: it grows the partition and writes the payload
+with `e2fsck`/`resize2fs`/`debugfs` inside a container, without mounting
+anything. `xtrans-install` refuses fixed disks, mounted targets and images that
+do not fit, then verifies the card byte for byte.
+
 ## Languages
 
 Target languages: French, English, Thai, Lao, Hmong, and selected minority languages of

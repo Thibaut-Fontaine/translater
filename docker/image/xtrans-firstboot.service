@@ -1,0 +1,13 @@
+[Unit]
+Description=Load the translator container image once
+After=docker.service
+Requires=docker.service
+ConditionPathExists=!/var/lib/xtrans/.image-loaded
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/sh -c 'docker load -i /opt/xtrans/xtrans-arm64.tar && mkdir -p /var/lib/xtrans && touch /var/lib/xtrans/.image-loaded'
+
+[Install]
+WantedBy=multi-user.target

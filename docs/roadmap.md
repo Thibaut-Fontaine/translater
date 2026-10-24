@@ -329,57 +329,36 @@ unit test could reach.
 
 ---
 
-## M7 — SD image construction (Phase 1)
+## M7 — SD image construction (Phase 1) — done
 
-**Status:** payload validated on arm64; image builder still missing.
+**Delivered:** `scripts/build_image.sh` produces a 6 GB `xtrans.img` from the
+pinned Raspberry Pi OS Lite 2026-10-06 base, the `xtrans:arm64` container, and
+`models/`. Verification passes all 13 checks (container tar, whisper model,
+NLLB files, both voices, dockerd, all four units enabled).
 
-The arm64 container builds (cross-compiled) and now **runs**: under QEMU the
-full selftest passes — French 28 049 samples in, 29-char transcript, 16-char
-translation, 18 575 samples out, both WAVs written (16 min wall, emulation).
+**How it works, and why not the obvious way:** the image is never mounted and no
+loop device is used. The partition table is grown with `sfdisk`, partition 2 is
+extracted with `dd`, `e2fsck`/`resize2fs` run on it as a file, the payload is
+written with `debugfs`, and the partition is written back. All of it happens in
+an unprivileged trixie container, so no root is needed on the workstation.
 
-The startup crash was a packaging detail: Debian's arm64 ONNX Runtime installs
-`libonnxruntime.so.1.21` with **no `.so.1` or `.so`**, so the delay loader
-returned null and the first ORT call segfaulted. The loader now tries
-`.so.1`, `.so.1.21` and `.so`, and the runtime image adds the stable
-`.so.1` symlink.
+**Reflection:** three approaches failed before this one.
 
-Remaining for M7: the image builder works up to loop-device access and then
-fails in this environment. `losetup -fP` does not create partition nodes in the
-Docker Desktop VM, and `kpartx` mapping is unstable (repeated runs leave
-`/dev/loopN` "lost"). The builder (`scripts/build_image.sh`,
-`docker/image/provision.sh`, `verify.sh`) is pinned to Raspberry Pi OS Lite
-2026-10-06 and static Docker 29.9.2 (both SHA-256 pinned). It has two execution
-modes:
+1. Docker-in-Docker with `losetup -P`: the Docker Desktop VM never created
+   partition nodes; `kpartx` left `/dev/loopN` "lost" between runs.
+2. Host mode with sudo: Ubuntu 22.04 ships e2fsprogs 1.46.5, and the trixie
+   image uses the `orphan_file` ext4 feature (needs ≥ 1.47) — `e2fsck` refused
+   and `resize2fs` followed. A newer kernel would also be needed to mount it.
+3. Kubernetes-style "just mount it": same feature problem, plus root.
 
-- `--host`: provision and verify directly on the machine with `sudo` (real loop
-  devices). This is the supported path.
-- default: privileged container, which fails in the Docker Desktop VM because
-  `losetup -P` does not create partition nodes there.
+The lesson: when the filesystem is newer than the host, treat it as a **file**
+and use the matching userspace tools from a container. That also removed the
+sudo requirement entirely.
 
-The image is not built yet; disk was 99 % full during the attempt and has since
-been cleaned.
-
-
-**Todo, with feasibility**
-
-| Sub-step | Feasible here? | Notes |
-| --- | --- | --- |
-| Download and pin Raspberry Pi OS Lite arm64 (trixie) | yes | ~1.2 GB, SHA-256 pinned |
-| Inject Docker engine, compose file, unit, models, container tar | yes | needs Docker arm64 packages (download .deb, no execution) |
-| Cross-build the arm64 container | yes, build-only | sysroot from Debian arm64 .debs; cannot be run here |
-| Read-only data partition + boot config | yes | file-level edits, no execution |
-| Loopback verification (mount, check hashes, unit enabled) | yes, with caveats | needs `--privileged` container or sudo; verify early with a small ext4 image |
-| Reproducibility | partial | filesystem timestamps vary; pin inputs and document the nondeterminism |
-
-**Acceptance:** image builds with one command; verification script reports
-model hashes, unit, docker, and free space; image ≤ 8 GB.
-
-**Risks:** mounting inside the Docker Desktop VM may be restricted. If
-`--privileged` mounting fails, fall back to `mtools`/`e2ls`-style inspection of
-the FAT boot partition plus a hash manifest, and accept that full mount
-verification happens in M9.
-
----
+**Known limits:** the image is a fixed 6 GB and is not grown to the card on
+first boot (a 32 GB card keeps ~26 GB unpartitioned); booting it has not been
+tested (M9). Disk usage on this workstation is 97 %, so rebuilds need the old
+image removed first.
 
 ## M8 — Flasher binary (Phase 1)
 
