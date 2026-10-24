@@ -203,3 +203,26 @@ Jingpho and Shan — the rest need a different translation model. See
 Offline operation is possible, but the pipeline is only as good as the available models.
 Whisper and Piper both need language-specific coverage, NLLB-200 must actually support the
 language pair, and Hmong and the minority languages of Yunnan remain to be validated.
+
+## License
+
+The code in this repository is **MIT** (see [LICENSE](LICENSE)).
+
+That covers this project's own sources only. The device image and the vendored
+dependencies carry their own terms:
+
+| Component | License | Notes |
+| --- | --- | --- |
+| whisper.cpp | MIT | fetched at build time |
+| ONNX Runtime | MIT | Debian package |
+| SentencePiece | Apache-2.0 | Debian package |
+| Piper | **GPL-3** | fetched at build time; a distributed image must offer its source |
+| espeak-ng, open_jtalk | GPL-3 / MIT | built by Piper at build time |
+| libasound2, libgpiod | LGPL-2.1 | Debian packages |
+| NLLB-200-distilled-600M | **CC-BY-NC-4.0** | not in this repository; bundled in the image, **non-commercial use only** |
+| Piper voices | per voice (CC-BY / MIT) | see each voice's MODEL_CARD |
+
+So: the repository is MIT, but an SD image built from it is **not** MIT-only —
+it is a GPL-3 work (Piper) that embeds a non-commercial model (NLLB). If you
+want to distribute the image, keep the GPL-3 source offer and respect the
+NLLB non-commercial restriction, or replace NLLB with a redistributable model.
