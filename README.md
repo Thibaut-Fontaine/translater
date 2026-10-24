@@ -198,11 +198,55 @@ Jingpho and Shan — the rest need a different translation model. See
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-## Critical consideration
+## Language coverage: Whisper vs Piper vs NLLB-200
 
-Offline operation is possible, but the pipeline is only as good as the available models.
-Whisper and Piper both need language-specific coverage, NLLB-200 must actually support the
-language pair, and Hmong and the minority languages of Yunnan remain to be validated.
+A language can only be translated end to end when **all three** components exist:
+Whisper (speech in), NLLB-200 (translation), Piper (speech out). Counts verified
+2026-10-24 from:
+
+- **Whisper** — [whisper-api.com/docs/languages](https://whisper-api.com/docs/languages/):
+  **100 languages**, including Lao (`lo`), Thai (`th`), Tibetan (`bo`), but no
+  Hmong, Jingpho or Shan.
+- **Piper** — [voice repository](https://huggingface.co/rhasspy/piper-voices):
+  **178 voices across 58 languages**. The upstream
+  [VOICES.md](https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/VOICES.md)
+  lists only 44 and omits Thai, so the repository is what we use.
+- **NLLB-200** — [FLORES-200](https://github.com/facebookresearch/flores/blob/main/flores200/README.md):
+  **200 languages** (205 codes; some languages have two scripts).
+
+| Language | Whisper (STT) | NLLB-200 (MT) | Piper (TTS) | All three |
+| --- | --- | --- | --- | --- |
+| French | `fr` | `fra_Latn` | 7 voices (`fr_FR`) | **yes** |
+| English | `en` | `eng_Latn` | 38 voices (`en_US`, `en_GB`) | **yes** |
+| Vietnamese | `vi` | `vie_Latn` | 3 voices (`vi_VN`) | yes |
+| Chinese | `zh` | `zho_Hans`, `zho_Hant` | 4 voices (`zh_CN`) | yes |
+| Indonesian | `id` | `ind_Latn` | 1 voice (`id_ID`) | yes |
+| Thai | `th` | `tha_Thai` | 1 voice (`th_TH-tsync2-medium`), needs a Piper ≥ 1.9 frontend | **no** |
+| Lao | `lo` | `lao_Laoo` | **no voice** | no |
+| Khmer | `km` | `khm_Khmr` | **no voice** | no |
+| Burmese | `my` | `mya_Mymr` | **no voice** | no |
+| Malay | `ms` | `zsm_Latn` | **no voice** | no |
+| Tagalog | `tl` | `tgl_Latn` | **no voice** | no |
+| Tibetan | `bo` | `bod_Tibt` | **no voice** | no |
+| Jingpho (Kachin) | **no** | `kac_Latn` | **no voice** | no |
+| Shan | **no** | `shn_Mymr` | **no voice** | no |
+| Hmong | **no** | **no** | **no voice** | no |
+
+What this means for the device:
+
+- **Only five languages have all three components**, and this project validates
+  just French and English end to end today.
+- **Thai is close**: STT and MT exist, and a voice exists, but it declares
+  `phoneme_type: "thai"`, a frontend Piper 1.8 does not implement. Until Piper
+  gains it, Thai has no speech output.
+- **The screenless, bidirectional design makes TTS mandatory.** A language
+  without a voice cannot be a *target*: Lao, Khmer, Burmese, Malay, Tagalog and
+  Tibetan can be translated into but never spoken.
+- **Hmong is absent from all three**, and of the Yunnan languages NLLB covers
+  only Tibetan, Jingpho and Shan — cross-border varieties, not the full set.
+  No model evaluated (NLLB, SMaLL-100, Sailor, Qwen 0.5B) covers Hmong.
+
+Full per-source lists: [docs/languages.md](docs/languages.md).
 
 ## License
 
