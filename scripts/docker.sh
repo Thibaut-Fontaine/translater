@@ -25,7 +25,7 @@ usage: scripts/docker.sh <command>
 commands:
   test    build the dev image (tests run during the build) and re-run ctest
   smoke   run xtransd in the dev image against a scripted stdin sequence
-  image   cross-build the linux/arm64 runtime image to a docker-loadable tar
+  image   cross-build the linux/arm64 runtime image into the local store
   run     start the runtime stack from docker/compose.yaml on the device
 
 environment:
@@ -78,14 +78,16 @@ EOF
 
 cmd_image() {
   require_docker
-  mkdir -p "$(dirname -- "$OUT")"
+  # --load keeps the image in the local store, which the SD image builder
+  # needs (it runs `docker save`). Cross-compilation happens on the host, so no
+  # emulation is required to build.
   docker buildx build \
     --platform linux/arm64 \
     -f "$ROOT/docker/Dockerfile" \
     -t "$IMAGE" \
-    --output "type=docker,dest=$OUT" \
+    --load \
     "$ROOT"
-  echo "wrote $OUT"
+  echo "image $IMAGE loaded"
 }
 
 cmd_run() {
