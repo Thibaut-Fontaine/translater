@@ -2,36 +2,44 @@
 # Provision a Raspberry Pi OS image with the translator stack.
 # Runs inside a privileged container: needs losetup, mount, resize2fs.
 #
-#   provision.sh IMAGE DOCKER_TGZ PAYLOAD_DIR
+#   provision.sh IMAGE DOCKER_TGZ PAYLOAD_DIR MODELS_DIR
 set -eu
 
 IMAGE=$1
 DOCKER_TGZ=$2
 PAYLOAD=$3
+MODELS=${4:-}
 SIZE=${XTRANS_IMAGE_SIZE:-8G}
 
 echo "== growing the image to $SIZE and partition 2 to the end"
 truncate -s "$SIZE" "$IMAGE"
 printf ',+\n' | sfdisk --no-reread -N 2 "$IMAGE" >/dev/null
 
-LOOP=$(losetup -f --show "$IMAGE")
-# The Docker VM does not expose loop partitions via the kernel; kpartx maps
-# them in /dev/mapper instead.
-kpartx -as "$LOOP" >/dev/null
-BASE=$(basename "$LOOP")
-ROOT_DEV=
-BOOT_DEV=
+LOOP=$(losetup -fP --show "$IMAGE")
+sleep 1
+if [ -b "${LOOP}p2" ]; then
+  BASE=$(basename "$LOOP")
+  ROOT_DEV=${LOOP}p2
+  BOOT_DEV=${LOOP}p1
+  MAPPED=0
+else
+  # The Docker Desktop VM does not expose loop partitions; kpartx maps them
+  # into /dev/mapper instead.
+  kpartx -as "$LOOP" >/dev/null
+  BASE=$(basename "$LOOP")
+  ROOT_DEV=/dev/mapper/${BASE}p2
+  BOOT_DEV=/dev/mapper/${BASE}p1
+  MAPPED=1
+fi
 cleanup() {
   set +e
   umount /mnt/boot 2>/dev/null
   umount /mnt/root 2>/dev/null
-  [ -n "$LOOP" ] && kpartx -d "$LOOP" 2>/dev/null
+  [ -n "$LOOP" ] && [ "${MAPPED:-0}" = "1" ] && kpartx -d "$LOOP" 2>/dev/null
   [ -n "$LOOP" ] && losetup -d "$LOOP" 2>/dev/null
 }
 trap cleanup EXIT INT TERM
 
-ROOT_DEV=/dev/mapper/${BASE}p2
-BOOT_DEV=/dev/mapper/${BASE}p1
 e2fsck -fy "$ROOT_DEV" || true
 resize2fs "$ROOT_DEV" >/dev/null
 
@@ -43,7 +51,11 @@ echo "== payload"
 mkdir -p /mnt/root/opt/xtrans/models
 cp "$PAYLOAD/compose.yaml" /mnt/root/opt/xtrans/
 cp "$PAYLOAD/README.md" /mnt/root/opt/xtrans/
-cp -a "$PAYLOAD/models/." /mnt/root/opt/xtrans/models/
+if [ -n "$MODELS" ]; then
+  cp -a "$MODELS/." /mnt/root/opt/xtrans/models/
+else
+  cp -a "$PAYLOAD/models/." /mnt/root/opt/xtrans/models/
+fi
 cp "$PAYLOAD/xtrans-arm64.tar" /mnt/root/opt/xtrans/
 
 echo "== docker (static arm64, no apt)"

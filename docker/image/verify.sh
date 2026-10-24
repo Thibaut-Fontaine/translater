@@ -2,13 +2,18 @@
 # Read-only verification of a provisioned image. Runs privileged.
 set -eu
 IMAGE=$1
-LOOP=$(losetup -f --show "$IMAGE")
-kpartx -as "$LOOP" >/dev/null
-BASE=$(basename "$LOOP")
+LOOP=$(losetup -fP --show "$IMAGE")
+sleep 1
+if [ -b "${LOOP}p2" ]; then
+  DEV=${LOOP}p2
+else
+  kpartx -as "$LOOP" >/dev/null
+  DEV=/dev/mapper/$(basename "$LOOP")p2
+fi
 cleanup() { set +e; umount /mnt/root 2>/dev/null; kpartx -d "$LOOP" 2>/dev/null; losetup -d "$LOOP" 2>/dev/null; }
 trap cleanup EXIT INT TERM
 mkdir -p /mnt/root
-mount -o ro "/dev/mapper/${BASE}p2" /mnt/root
+mount -o ro "$DEV" /mnt/root
 
 fail=0
 check() { if [ -e "$1" ]; then echo "ok      $2"; else echo "MISSING $2"; fail=1; fi; }

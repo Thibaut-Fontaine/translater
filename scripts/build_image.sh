@@ -16,6 +16,7 @@ BASE_XZ="$WORK/base.img.xz"
 IMAGE="$WORK/xtrans.img"
 PAYLOAD="$WORK/payload"
 CONTAINER_IMAGE="${XTRANS_CONTAINER_IMAGE:-xtrans:arm64}"
+HOST_MODE=0
 
 pin() { awk -v k="$1" '$1 == k { print $2; exit }' "$PIN"; }
 
@@ -28,6 +29,8 @@ container image xtrans:arm64 and models/ (NLLB, whisper, Piper voices).
 
   --keep         keep the working image (a flashable copy is always kept)
   --verify-only  verify the existing image, do not rebuild
+  --host         run the privileged steps on this machine with sudo
+                 (no Docker-in-Docker; needs working loop devices)
   --self-test    validate pins and required files without touching the network
 EOF
 }
@@ -78,7 +81,7 @@ prepare_payload() {
   cp -a "$ROOT/docker/image/docker.service" "$PAYLOAD/"
   cp -a "$ROOT/docker/image/containerd.service" "$PAYLOAD/"
   cp -a "$ROOT/README.md" "$PAYLOAD/"
-  cp -a "$ROOT/models/." "$PAYLOAD/models/"
+  rmdir "$PAYLOAD/models" 2>/dev/null || true
   local url sha
   url="$(pin docker_url)"
   sha="$(pin docker_sha256)"
@@ -89,6 +92,11 @@ prepare_payload() {
 }
 
 run_privileged() {
+  if [[ "$HOST_MODE" == "1" ]]; then
+    sudo sh "$ROOT/docker/image/provision.sh" "$IMAGE" "$WORK/docker.tgz" \
+      "$PAYLOAD" "$ROOT/models"
+    return
+  fi
   docker run --rm --privileged \
     -v "$ROOT:/work" -w /work \
     debian:trixie-slim sh -c '
@@ -96,10 +104,14 @@ run_privileged() {
       apt-get update -qq >/dev/null 2>&1
       apt-get install -y -qq util-linux e2fsprogs fdisk dosfstools kpartx >/dev/null 2>&1
       sh /work/docker/image/provision.sh /work/build/image/xtrans.img \
-         /work/build/image/docker.tgz /work/build/image/payload'
+         /work/build/image/docker.tgz /work/build/image/payload /work/models'
 }
 
 verify() {
+  if [[ "$HOST_MODE" == "1" ]]; then
+    sudo sh "$ROOT/docker/image/verify.sh" "$IMAGE"
+    return
+  fi
   docker run --rm --privileged \
     -v "$ROOT:/work" -w /work \
     debian:trixie-slim sh -c '
@@ -113,6 +125,7 @@ case "${1:-}" in
   --self-test) self_test; exit $? ;;
   --verify-only) verify; exit $? ;;
   --keep) ;;
+  --host) HOST_MODE=1 ;;
   "") ;;
   -h | --help) usage; exit 0 ;;
   *) usage >&2; exit 2 ;;

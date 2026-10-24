@@ -347,15 +347,17 @@ Remaining for M7: the image builder works up to loop-device access and then
 fails in this environment. `losetup -fP` does not create partition nodes in the
 Docker Desktop VM, and `kpartx` mapping is unstable (repeated runs leave
 `/dev/loopN` "lost"). The builder (`scripts/build_image.sh`,
-`docker/image/provision.sh`, `verify.sh`) is written, pinned to Raspberry Pi OS
-Lite 2026-10-06 and static Docker 29.9.2 (both SHA-256 pinned), and needs either:
+`docker/image/provision.sh`, `verify.sh`) is pinned to Raspberry Pi OS Lite
+2026-10-06 and static Docker 29.9.2 (both SHA-256 pinned). It has two execution
+modes:
 
-- a host with working loop devices (`sudo` on a normal Linux box), or
-- an offset-based rewrite (dd partition slices out, `e2fsck`/`resize2fs`/
-  `debugfs` on files, dd back), which needs ~8 GB of scratch space.
+- `--host`: provision and verify directly on the machine with `sudo` (real loop
+  devices). This is the supported path.
+- default: privileged container, which fails in the Docker Desktop VM because
+  `losetup -P` does not create partition nodes there.
 
-Neither is available here right now: 185 GB disk is 99% full (9 GB free) and the
-VM kernel does not expose loop partitions.
+The image is not built yet; disk was 99 % full during the attempt and has since
+been cleaned.
 
 
 **Todo, with feasibility**
