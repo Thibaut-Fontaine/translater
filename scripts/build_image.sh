@@ -41,6 +41,8 @@ self_test() {
   url="$(pin base_url)"; sha="$(pin base_sha256)"
   [[ -n "$url" && "$sha" =~ ^[0-9a-f]{64}$ ]] || { echo "bad base pin" >&2; failed=1; }
   [[ "$(pin docker_sha256)" =~ ^[0-9a-f]{64}$ ]] || { echo "bad docker pin" >&2; failed=1; }
+  [[ "$(pin compose_sha256)" =~ ^[0-9a-f]{64}$ ]] || { echo "bad compose pin" >&2; failed=1; }
+  [[ -f "$ROOT/docker/image/add_compose.sh" ]] || { echo "missing add_compose.sh" >&2; failed=1; }
 
   for f in docker/image/provision_nomount.sh docker/image/verify_nomount.sh \
            docker/compose.yaml docker/xtrans.service docker/image/docker.service \
@@ -89,6 +91,14 @@ prepare_payload() {
     curl -fL --retry 3 -o "$WORK/docker.tgz" "$url"
   fi
   echo "$sha  $WORK/docker.tgz" | sha256sum -c - >/dev/null
+
+  # The static Docker tarball has no compose plugin; the unit needs it.
+  url="$(pin compose_url)"; sha="$(pin compose_sha256)"
+  if [[ ! -f "$WORK/docker-compose" ]]; then
+    curl -fL --retry 3 -o "$WORK/docker-compose" "$url"
+  fi
+  echo "$sha  $WORK/docker-compose" | sha256sum -c - >/dev/null
+  cp -a "$WORK/docker-compose" "$PAYLOAD/docker-compose"
 }
 
 container_run() {

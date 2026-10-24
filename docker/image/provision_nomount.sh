@@ -71,6 +71,14 @@ echo "mkdir /usr/local" >>"$CMDS"
 echo "mkdir /usr/local/bin" >>"$CMDS"
 emit_files /tmp/docker/docker /usr/local/bin 755
 
+# Compose plugin: the static Docker tarball does not ship one, but the unit
+# calls `docker compose`.
+echo "mkdir /usr/local/lib" >>"$CMDS"
+echo "mkdir /usr/local/lib/docker" >>"$CMDS"
+echo "mkdir /usr/local/lib/docker/cli-plugins" >>"$CMDS"
+echo "write $PAYLOAD/docker-compose /usr/local/lib/docker/cli-plugins/docker-compose" >>"$CMDS"
+echo "sif /usr/local/lib/docker/cli-plugins/docker-compose mode 0100755" >>"$CMDS"
+
 echo "mkdir /etc/systemd" >>"$CMDS"
 echo "mkdir /etc/systemd/system" >>"$CMDS"
 echo "mkdir /etc/systemd/system/multi-user.target.wants" >>"$CMDS"
