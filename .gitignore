@@ -37,3 +37,6 @@ third_party/downloads/
 # Models and voice files (pins are tracked, the weights are not)
 models/*
 !models/*.pin
+
+# Release artifacts
+dist/
