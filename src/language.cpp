@@ -5,16 +5,10 @@
 namespace xtrans {
 namespace {
 
-// Capabilities mirror docs/languages.md. A language moves to kReady only after
-// its recognizer, translator and voice have been measured on the device.
-constexpr std::array<LangInfo, kLangCount> kTable{{
-    {Lang::fr, "fra", "fra_Latn", "fr", "fr_FR-siwis-medium", 256057, kReady},
-    {Lang::en, "eng", "eng_Latn", "en", "en_US-lessac-medium", 256047, kReady},
-    {Lang::th, "tha", "tha_Thai", "th", "", 256175, kStt | kMt},
-    {Lang::lo, "lao", "lao_Laoo", "lo", "", 256100, kStt | kMt},
-    // NLLB-200 has no Hmong language token; nothing can translate it yet.
-    {Lang::hmn, "hmn", "", "", "", 0, 0},
-}};
+// Capabilities: STT from whisper.cpp coverage, MT from the NLLB token id, TTS
+// only where a validated Piper voice is shipped. The table and the per-mode
+// lists are generated; see scripts/gen_language_catalog.py.
+#include "lang_table_generated.inc"
 
 constexpr std::array<Lang, 2> kSelectable{Lang::fr, Lang::en};
 
@@ -27,13 +21,51 @@ std::size_t index_of(Lang lang) noexcept {
 
 const LangInfo& lang_info(Lang id) noexcept { return kTable[index_of(id)]; }
 
+std::uint8_t capabilities(Lang id) noexcept { return lang_info(id).caps; }
+
+bool supports(Lang id, Mode mode) noexcept {
+  const std::uint8_t caps = capabilities(id);
+  const bool stt = (caps & kStt) != 0;
+  const bool mt = (caps & kMt) != 0;
+  const bool tts = (caps & kTts) != 0;
+  switch (mode) {
+    case Mode::speech_to_speech:
+      return stt && mt && tts;
+    case Mode::speech_to_text:
+      return stt && mt;
+    case Mode::text_to_text:
+      return mt;
+    case Mode::text_to_speech:
+      return mt && tts;
+  }
+  return false;
+}
+
 bool ready(Lang id) noexcept { return lang_info(id).caps == kReady; }
 
 bool translatable(Lang from, Lang to) noexcept {
   return from != to && ready(from) && ready(to);
 }
 
+bool can_translate(Lang from, Lang to) noexcept {
+  return from != to && (capabilities(from) & kMt) != 0 && (capabilities(to) & kMt) != 0;
+}
+
 std::span<const Lang> selectable() noexcept { return kSelectable; }
+
+std::span<const Lang> selectable(Mode mode) noexcept {
+  switch (mode) {
+    case Mode::speech_to_speech:
+      return kSpeechToSpeech;
+    case Mode::speech_to_text:
+      return kSpeechToText;
+    case Mode::text_to_text:
+      return kTextToText;
+    case Mode::text_to_speech:
+      return kTextToSpeech;
+  }
+  return {};
+}
 
 void Selector::cycle(Button button) noexcept {
   const auto langs = cycle_;
