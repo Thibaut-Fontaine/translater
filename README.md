@@ -135,13 +135,30 @@ Troubleshooting: if the prompt never plays, check `journalctl -u xtrans` first;
 the container logs `ready`, then one line per turn (`stt status=`, `mt status=`,
 `tts status=`) without ever printing the transcript or translation.
 
-## Mobile app (planned)
+## Mobile app (Android; iOS shell)
 
-A React Native version for Android and iOS is specified in
-[docs/mobile-app.md](docs/mobile-app.md). It reuses the C++ core, adds a screen
-showing the transcript and translation live, and therefore supports **text-only
-pairs** — languages with NLLB translation but no voice, or typed input instead
-of speech.
+`mobile/` is a React Native app around the same C++ core. The screen shows the
+transcript and the translation, so a pair only needs NLLB: **202 languages**
+(201 translatable, 87 with speech input) instead of the Pi's two. Languages
+without a whisper code are typed; languages without a voice are read out by the
+OS speech engine.
+
+Status: the Android APK builds (73 MB, `arm64-v8a`) with a TurboModule, native
+capture, ONNX Runtime 1.21 and whisper.cpp. **It has not run on a phone yet.**
+The iOS UI is shared but its Objective-C++ bridge still needs a Mac
+([docs/mobile-ios.md](docs/mobile-ios.md)).
+
+```bash
+scripts/fetch_third_party.sh && scripts/fetch_models.sh
+scripts/fetch_ort_android.sh
+cd mobile && npm install
+cd android && ./gradlew assembleRelease
+cd ../.. && scripts/push_models_android.sh   # 1.4 GB over USB
+adb install -r mobile/android/app/build/outputs/apk/release/app-release.apk
+```
+
+Design and decisions: [docs/mobile-app.md](docs/mobile-app.md). Build details:
+[mobile/README.md](mobile/README.md).
 
 ## Container (development)
 

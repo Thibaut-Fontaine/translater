@@ -116,6 +116,11 @@ case "${1:-}" in
       IFS=: read -r pin dest <<<"$entry"
       fetch_pin "$pin" "$dest"
     done
+    # The phone cannot use SentencePiece; this exports the same tokenizer as a
+    # compact blob for src/bpe.cpp. Harmless for the Pi build.
+    if [[ -f models/nllb/tokenizer.json ]] && command -v python3 >/dev/null; then
+      python3 scripts/gen_nllb_bpe.py
+    fi
     ;;
   --self-test) self_test; exit $? ;;
   -h | --help) usage; exit 0 ;;
