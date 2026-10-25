@@ -1,0 +1,357 @@
+# Mobile app (Android + iOS, React Native) — project idea
+
+Status: **idea / plan**, not started. Written 2026-10-25 so the work can resume
+after a context reset without losing decisions.
+
+Companion documents: [roadmap](roadmap.md), [languages](languages.md),
+[language matrix](language-matrix.md), [docker](docker.md).
+Repository state at the time of writing: the Raspberry Pi version is at
+`v0.1.0` (software complete, hardware unvalidated), all tests green, SD image
+builds and verifies.
+
+---
+
+## 1. Goal
+
+Bring the same offline translator to phones, sharing the C++ core, and use the
+screen to **show** the transcript and the translation live.
+
+The phone is not a Pi with a display bolted on. The screen changes the product:
+
+- text becomes a first-class output, so **speech synthesis is optional**;
+- typing becomes a possible input, so **speech recognition is optional** too;
+- a language pair is useful as soon as **translation** covers it.
+
+The app must work fully offline after models are installed: no account, no
+telemetry, no network at runtime.
+
+## 2. What changes compared to the Pi version
+
+| Aspect | Pi 5 device | Phone app |
+| --- | --- | --- |
+| Input | press-to-talk only | press-to-talk **and** typed text |
+| Output | speech only | on-screen text **and** optional speech |
+| Language readiness | all three (STT+MT+TTS) | per capability; text-only pairs allowed |
+| Capture/playback | ALSA | AAudio/Oboe (Android), AVAudioEngine (iOS) |
+| Controls | 3 GPIO buttons | touch UI (plus OS buttons/gestures) |
+| Deployment | SD image + Docker | APK / AAB, TestFlight |
+| Sizing | 1.6 GB models on SD | 1.5 GB models in app storage |
+| Constraints | 4 GB RAM, throttling, battery | 6–8 GB RAM, faster CPU, OS memory limits |
+
+The 1.6 s latency target was a Pi constraint. Phones are faster, but model load,
+thermal throttling and iOS memory limits are the new risks. Keep the budget as
+a measurement target, not a promise.
+
+## 3. What can be reused (inventory)
+
+Everything below lives in this repository today.
+
+### Reusable unchanged
+
+| Module | Path | Why |
+| --- | --- | --- |
+| Language table, pairs, rotation | `include/xtrans/language.hpp`, `src/language.cpp` | pure data + selection |
+| Translation token rules | `include/xtrans/nllb_ids.hpp`, `src/nllb_ids.cpp` | offset/EOS/filter, unit-tested |
+| Bounded UTF-8 text | `include/xtrans/text.hpp`, `src/text.cpp` | transcript assembly |
+| PCM utilities | `include/xtrans/audio.hpp`, `src/audio.cpp` | RMS, dBFS, lock-free ring, VAD gate |
+| Audio conversion | `src/audio_convert.cpp` | float→int16, 48k→16k resampling |
+| Turn state machine | `include/xtrans/pipeline.hpp`, `src/pipeline.cpp` | idle→recording→…→idle |
+| Watchdog | `include/xtrans/watchdog.hpp` | stage deadlines |
+| Turn engine (debounce, buffering, endpointing) | `include/xtrans/device.hpp`, `src/device.cpp` | logic is hardware-agnostic |
+| Controls/line protocol | `include/xtrans/control.hpp`, `src/control.cpp` | keep for tests/dev shell |
+| WAV writer | `src/wav.cpp` | saving utterances/translations for debug |
+| whisper.cpp adapter | `include/xtrans/adapters/whisper.hpp`, `src/adapters/whisper.cpp` | rebuilt with NDK / Xcode |
+| NLLB ONNX adapter | `include/xtrans/adapters/nllb.hpp`, `src/adapters/nllb.cpp` | needs ORT Mobile linking (see §8) |
+| Piper adapter (optional) | `src/adapters/piper.cpp` | licensing caveat, see §12 |
+| Test harness + suites | `tests/` | keep running on the host |
+| CMake, dev Docker image | `CMakeLists.txt`, `docker/`, `scripts/docker.sh` | reproducible host build/tests |
+
+### Reusable with changes
+
+| Module | Change |
+| --- | --- |
+| Readiness model (`ready()`, `selectable()`) | replace "all three" with per-capability query; UI filters by mode |
+| `Controller` | accept a text turn as well as a voice turn |
+| `Device` | optional: on the phone the UI plays the button role, but the class still works for a "press" event |
+| `Stt`/`Mt`/`Tts` ports | unchanged interfaces; TTS may be implemented by the OS instead of Piper |
+
+### Not reusable
+
+| Module | Replacement |
+| --- | --- |
+| `src/adapters/alsa.cpp` | native capture/playback module (Oboe / AVAudioEngine) |
+| `src/adapters/gpiod.cpp` | touch UI |
+| `docker/compose.yaml`, `docker/image/*`, `scripts/build_image.sh`, `apps/xtrans-install.cpp` | APK/AAB packaging, TestFlight |
+| `src/adapters/ort_delay_load.cpp` | glibc-specific (`RTLD_DEEPBIND`); on mobile ORT is linked normally, so the protobuf clash does not apply |
+| systemd units | OS app lifecycle / foreground service |
+
+## 4. Architecture
+
+```
+┌──────────────────────────── React Native (TypeScript) ────────────────────────┐
+│  Screens: Translate · Languages · Models · Settings                            │
+│  State:  zustand/redux store (mode, languages, transcript, translation, status)│
+│  TTS:    OS engine (Android TextToSpeech / iOS AVSpeechSynthesizer)             │
+└───────────────▲───────────────────────────────────────────┬───────────────────┘
+                │ TurboModule events (throttled)             │ commands
+                │ onState/onTranscript/onTranslation/onLevel │ start/stop/translate/cancel
+┌───────────────┴───────────────────────────────────────────▼───────────────────┐
+│  Native module  (Kotlin/JNI on Android, Objective-C++ on iOS)                  │
+│  • owns the C++ session, one worker thread                                     │
+│  • capture: AAudio/Oboe | AVAudioEngine → writes into the C++ ring (16 kHz)    │
+│  • never sends PCM through the JS bridge                                       │
+└───────────────▲───────────────────────────────────────────┬───────────────────┘
+                │ std::span / callbacks                      │
+┌───────────────┴───────────────────────────────────────────▼───────────────────┐
+│  C++ core (libxtrans, same sources as the Pi)                                  │
+│  Session → Recorder/Gate → WhisperStt → NllbMt → (Tts optional)                │
+│  Ports: AudioIn, AudioOut, Stt, Mt, Tts                                        │
+└───────────────────────────────────────────────────────────────────────────────┘
+```
+
+Key rules:
+
+- **Audio never crosses the JS bridge.** Capture writes straight into the ring;
+  JS receives only levels (≈10 Hz) and completed text.
+- **One worker thread** runs capture → STT → MT; JS stays responsive. Results are
+  marshalled to the JS thread with RN's `CallInvoker`.
+- The core keeps zero knowledge of RN, Android or iOS. New code lives in
+  adapters + a thin `Session` facade (see §5).
+
+## 5. C++ core additions (shared, host-tested)
+
+1. **Capabilities instead of `ready()`**
+   ```cpp
+   struct Capabilities { bool stt; bool mt; bool tts; };
+   Capabilities capabilities(Lang);          // from the language table
+   bool can_translate(Lang from, Lang to);   // mt on both sides
+   ```
+   `selectable()` becomes `selectable(mode)` where mode is
+   `speech_to_speech | speech_to_text | text_to_text | text_to_speech`.
+   Existing Pi behaviour is preserved by `selectable(speech_to_speech)`.
+
+2. **`Session` facade** (no hardware, no threads of its own)
+   ```cpp
+   class Session {
+     Status configure(Config);              // model paths, languages, mode
+     Status start_voice();                  // begins a turn (PTT down)
+     Status stop_voice();                   // PTT up, run STT→MT
+     Status translate_text(std::string_view);// typed input path
+     Status cancel();
+     void poll(uint64_t now_ms);            // drives watchdog/timeouts
+     // callbacks: on_state, on_transcript, on_translation, on_error
+   };
+   ```
+   Unit tests drive it with fake `Stt`/`Mt` — no models, no audio.
+
+3. **Text turn in the state machine**: `press → recording → transcribing →
+   translating → speaking → idle` gets a sibling `text → translating →
+   (speaking) → idle`. Keep it explicit rather than overloading `recording`.
+
+4. **Typed input path** reuses `TextBuffer` and the MT adapter directly.
+
+## 6. Capability matrix and UI behaviour
+
+The language matrix (`docs/language-matrix.md`) is the source of truth.
+
+| Capability | Example languages | UI |
+| --- | --- | --- |
+| STT + MT + TTS | fr, en, vi, zh, id | full: speak in, hear out |
+| STT + MT, no TTS | lo, km, my, ms, tl, bo, th* | speak in, **text out** |
+| MT only | kac, shn | **text in, text out** |
+| No MT | hmn, most Yunnan languages | hidden from the picker |
+
+\* Thai has a voice file but needs a Piper ≥ 1.9 frontend; on the phone the OS TTS
+may cover it, to be tested per platform.
+
+UI consequences:
+
+- Language pickers show capability badges (`voice`, `typing`, `text only`).
+- If a pair has no TTS, the speaker button is disabled and the translation is
+  shown larger.
+- If a language has no STT, the mic button switches to a text field.
+- Unsupported pairs never appear, so the UI cannot promise what models cannot do.
+
+## 7. Screens (React Native)
+
+1. **Translate (main)**
+   - Top: language A ⇄ language B selector (tap to swap; long-press to pick).
+   - Middle: transcript card (live while recording) + translation card (large
+     text, selectable, copy/share).
+   - Bottom: big press-to-talk button; text input toggle; speaker replay button;
+     status line (`listening`, `transcribing`, `translating`, `no speech`,
+     `model missing`).
+   - Level meter driven by `onLevel` (no audio to JS).
+2. **Languages**: searchable list with badges and the matrix data baked in.
+3. **Models**: which files are installed, size, download/import, SHA-256 status,
+   delete; explains the 1.5 GB requirement.
+4. **Settings**: TTS on/off, voice, auto-endpointing vs push-to-talk, text size,
+   save last translations locally (off by default), clear history.
+5. **First run**: permissions rationale, model setup, language choice, 3-slide
+   intro, privacy statement (offline, no telemetry).
+
+Accessibility: large text, screen-reader labels, high contrast, and respect the
+OS text size. RTL languages (Arabic, Hebrew) need layout mirroring even though
+they are not target languages yet.
+
+## 8. Platform integration
+
+### React Native
+
+- New Architecture: Fabric + TurboModules + JSI, Hermes.
+- One TurboModule, `XtransSession`, with commands and events (§4).
+- Long-running work in native; JS only renders.
+- UI state in a small store (zustand); no global side effects.
+
+### Android
+
+- NDK r27+, `arm64-v8a` only (optionally `armeabi-v7a` later).
+- CMake build of `libxtrans` + whisper.cpp + ONNX Runtime AAR.
+- Capture: Oboe (AAudio), 16 kHz mono int16; fall back to 48 kHz + resample.
+- Permission: `RECORD_AUDIO`; foreground service for long sessions; screen-on
+  optional while translating.
+- Models in `filesDir/models` (not external storage); no backup of models.
+
+### iOS
+
+- Build requires **macOS + Xcode** (this workstation is Linux: iOS builds happen
+  elsewhere).
+- `libxtrans` + whisper.cpp + `onnxruntime-c` via CocoaPods/SPM; Objective-C++
+  bridge.
+- Capture: `AVAudioEngine` with `AVAudioConverter` to 16 kHz.
+- Models in Application Support, `NSURLIsExcludedFromBackupKey`.
+- `UIBackgroundModes` intentionally avoided: translate only in foreground.
+- Permission: `NSMicrophoneUsageDescription` with an honest explanation.
+
+### ONNX Runtime on mobile
+
+- Use the mobile builds (Android AAR, iOS CocoaPods). They are smaller; the
+  full build is unnecessary.
+- The Pi's delay-load workaround is not needed: ORT is a normal dependency of
+  the app binary, and there is no system SentencePiece to collide with.
+- Keep `NllbMt` unchanged except for the include paths; the `OrtGetApiBase`
+  override must be **disabled** on mobile (build flag), otherwise it would try
+  to `dlopen` a library that does not exist.
+
+## 9. Models and storage
+
+| File | Size | Notes |
+| --- | --- | --- |
+| NLLB encoder int8 | 415 MB | CC-BY-NC |
+| NLLB decoder + with-past | 916 MB | KV cache, as on the Pi |
+| SentencePiece tokenizer | 5 MB | |
+| whisper base (f16 or q5) | 142 / 57 MB | q5 recommended for phones |
+| Piper voices (optional) | ~60 MB each | only if Piper is shipped |
+| **Total (no Piper)** | **~1.5 GB** | |
+
+Delivery options (decide at implementation):
+
+1. **Download on first run** (recommended): user-initiated, resumable,
+   SHA-256 verified against `models/*.pin`; progress UI. Keeps the APK small and
+   respects Play/App Store size limits.
+2. **Bundled zip** in the APK for sideload builds: simplest, but ~1.5 GB APK.
+3. **Import from Files/Storage**: useful offline when the phone never has
+   network.
+
+Storage rules: verify hashes on install, never silently re-download, show the
+disk cost, allow deletion, exclude models from OS backups.
+
+## 10. Testing strategy (TDD applies to the core)
+
+- **Core (host)**: every change starts with a failing test in `tests/`.
+  Capability model, text turn, `Session`, timeouts — all hardware-free.
+- **Adapters (mobile)**: compiled and smoke-tested on device; capture and
+  playback get a manual checklist, plus a synthetic tone test.
+- **RN**: Jest for stores/selectors/capability filtering; React Native Testing
+  Library for screens with a fake TurboModule.
+- **Integration**: a `--selftest` equivalent on the phone (Piper→STT→MT is not
+  possible without a voice; use a bundled 3 s WAV per language, or typed text).
+- **Device matrix**: one Android (8 GB) and one iPhone; test offline mode by
+  enabling airplane mode after models are installed.
+- **No CI service** (project policy): all builds are local, documented.
+
+## 11. Distribution and licensing
+
+- **Personal/sideload first**: APK for Android, ad-hoc/TestFlight for iOS.
+- **NLLB-200 is CC-BY-NC-4.0**: personal use only. A store listing that
+  monetizes (or is backed by a company) is out of bounds; replacing NLLB with
+  SMaLL-100 (MIT) is the path to a redistributable app, at a quality cost to
+  measure.
+- **Piper is GPL-3**: bundling it in an app distributed through a store raises
+  source-offer obligations for the whole app. Prefer the OS TTS engines first;
+  keep Piper as an optional feature for sideload builds.
+- The repository stays MIT; the app's own code can stay MIT too.
+- App privacy labels: microphone only, no data collected, no tracking.
+
+## 12. Milestones (proposed)
+
+Each milestone ends with tests green, a PR, a self-review and a reflection;
+TDD is mandatory for the C++ core.
+
+**M10 — Capability model**
+- [ ] `Capabilities` per language, `selectable(mode)`, `can_translate`.
+- [ ] Tests for every mode; Pi behaviour unchanged (`speech_to_speech`).
+- [ ] Language matrix exported to JSON for the app (`scripts/gen_language_json.py`?).
+
+**M11 — Text turns and `Session`**
+- [ ] `text → translating → (speaking) → idle` in the pipeline.
+- [ ] `Session` facade with callbacks and `poll(now_ms)`.
+- [ ] Tests with fake engines; no models.
+
+**M12 — Mobile build of the core**
+- [ ] CMake option `XTRANS_MOBILE` disabling `ort_delay_load` and ALSA/GPIO.
+- [ ] Android NDK build (arm64-v8a) in a Docker image; APK size measured.
+- [ ] iOS static build on a Mac (documented commands, no local verification here).
+
+**M13 — RN shell and native module**
+- [ ] TurboModule `XtransSession` (commands + throttled events).
+- [ ] Audio capture modules (Oboe / AVAudioEngine) writing into the ring.
+- [ ] Fake module for Jest; contract tests.
+
+**M14 — Screens**
+- [ ] Translate, Languages (badges), Models, Settings, First run.
+- [ ] Live transcript + translation, copy/share, TTS replay.
+- [ ] Accessibility pass.
+
+**M15 — Models**
+- [ ] In-app download with hashes, resume, cancel, delete.
+- [ ] Import path; storage accounting; backup exclusion.
+
+**M16 — Device validation**
+- [ ] Android + iOS offline runs, both directions, text-only and speech modes.
+- [ ] Latency and thermal measurements; decide whisper model per platform.
+- [ ] Package: APK + TestFlight build; privacy labels.
+
+## 13. Open decisions (defaults proposed)
+
+| Decision | Default if nobody objects |
+| --- | --- |
+| Platform order | Android first, iOS once a Mac is available |
+| "Live" text | utterance-level (transcript+translation when speech ends); streaming partials later |
+| TTS | OS engines first; Piper optional/experimental |
+| Typed input | included from M11 |
+| Model delivery | download on first run, SHA-256 pinned, resumable |
+| Distribution | sideload/personal (NLLB NC); store only after replacing NLLB |
+| UI stack | React Native new architecture + zustand + small native modules |
+
+## 14. Risks
+
+| Risk | Mitigation |
+| --- | --- |
+| 1.5 GB models + ORT exceed iOS jetsam | measure peak RSS; load NLLB lazily; `q5` whisper |
+| App size / store limits | download models outside the bundle |
+| GPL-3 Piper in a store app | OS TTS first; Piper only for sideload |
+| NLLB NC blocks distribution | SMaLL-100 (MIT) as a tested alternative |
+| Audio latency on Android | Oboe with low-latency mode; measure; bypass JS |
+| Streaming ASR expectations | start utterance-level; partials are a separate project |
+| iOS build unavailable here | keep iOS behind a documented script; validate on a Mac |
+| Core drift between Pi and phone | one core, one test suite, no `#ifdef` in `src/` beyond adapter selection |
+
+## 15. What must not accidentally change
+
+- The core stays hardware-agnostic; no RN/Android/iOS types in
+  `include/xtrans` or `src/` outside `src/adapters/`.
+- The Pi tests keep passing after every core refactor.
+- The model pin files remain the source of truth for hashes.
+- No network at runtime; model download is the only user-initiated exception.
+- Utterance content is never logged by default.
