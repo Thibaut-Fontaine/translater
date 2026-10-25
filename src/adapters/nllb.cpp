@@ -185,7 +185,9 @@ std::unique_ptr<NllbMt> NllbMt::open(const NllbConfig& config, std::string& erro
 MtStatus NllbMt::translate(std::string_view text, Lang from, Lang to, std::span<char> out,
                            std::size_t& written) noexcept {
   written = 0;
-  if (!translatable(from, to)) return MtStatus::unsupported;
+  // A voice is not required: the phone app shows text, so any pair with NLLB
+  // tokens on both sides is translatable.
+  if (!can_translate(from, to)) return MtStatus::unsupported;
 
   const std::int32_t source_lang = lang_info(from).nllb_id;
   const std::int32_t target_lang = lang_info(to).nllb_id;
