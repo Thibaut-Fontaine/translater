@@ -36,6 +36,13 @@ bool Pipeline::release() noexcept {
   return true;
 }
 
+bool Pipeline::begin_text() noexcept {
+  if (state_ != State::idle) return false;
+  state_ = State::translating;
+  ++turns_;
+  return true;
+}
+
 bool Pipeline::abort() noexcept {
   if (state_ == State::idle) return false;
   state_ = State::idle;
