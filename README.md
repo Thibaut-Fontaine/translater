@@ -135,6 +135,14 @@ Troubleshooting: if the prompt never plays, check `journalctl -u xtrans` first;
 the container logs `ready`, then one line per turn (`stt status=`, `mt status=`,
 `tts status=`) without ever printing the transcript or translation.
 
+## Mobile app (planned)
+
+A React Native version for Android and iOS is specified in
+[docs/mobile-app.md](docs/mobile-app.md). It reuses the C++ core, adds a screen
+showing the transcript and translation live, and therefore supports **text-only
+pairs** — languages with NLLB translation but no voice, or typed input instead
+of speech.
+
 ## Container (development)
 
 The dev image is for tests and benchmarks; the arm64 image is what ships.
