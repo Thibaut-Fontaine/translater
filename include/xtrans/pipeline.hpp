@@ -18,6 +18,10 @@ class Pipeline {
   // Ends the recording and dispatches the turn. Rejected unless recording.
   bool release() noexcept;
 
+  // Starts a typed turn: idle -> translating, skipping capture and recognition.
+  // Rejected unless idle.
+  bool begin_text() noexcept;
+
   // Any state -> idle. Returns false when already idle.
   bool abort() noexcept;
 

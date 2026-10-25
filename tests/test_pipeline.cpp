@@ -103,3 +103,27 @@ TEST_CASE(test_pipeline_counts_finished_and_failed_turns) {
   CHECK_EQ(p.turns(), 4U);
   CHECK_EQ(p.failures(), 1U);
 }
+
+TEST_CASE(test_pipeline_text_turn_skips_capture_and_recognition) {
+  Pipeline p;
+  CHECK(p.begin_text());
+  CHECK_EQ(p.state(), State::translating);
+  CHECK_EQ(p.turns(), 1U);
+  // A second text turn cannot start while one is open.
+  CHECK(!p.begin_text());
+  // Recognition is skipped, so completing it out of order is rejected.
+  CHECK(!p.complete(Stage::stt, true));
+  CHECK(p.complete(Stage::mt, true));
+  CHECK_EQ(p.state(), State::speaking);
+  CHECK(p.complete(Stage::tts, true));
+  CHECK_EQ(p.state(), State::idle);
+  CHECK(!p.begin_text() == false);  // idle again
+}
+
+TEST_CASE(test_pipeline_text_turn_failure_returns_to_idle) {
+  Pipeline p;
+  CHECK(p.begin_text());
+  CHECK(!p.complete(Stage::mt, false));
+  CHECK_EQ(p.state(), State::idle);
+  CHECK_EQ(p.failures(), 1U);
+}

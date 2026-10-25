@@ -69,6 +69,7 @@ add_library(xtrans STATIC
   src/nllb_ids.cpp
   src/pipeline.cpp
   src/recorder.cpp
+  src/session.cpp
   src/text.cpp
   src/wav.cpp
 )
@@ -235,6 +236,7 @@ if(XTRANS_BUILD_TESTS)
     tests/test_nllb.cpp
     tests/test_pipeline.cpp
     tests/test_recorder.cpp
+    tests/test_session.cpp
     tests/test_text.cpp
     tests/test_wav.cpp
     tests/test_watchdog.cpp
