@@ -204,14 +204,14 @@ def emit_table(legacy, entries):
 
 def emit_json(legacy, entries):
     items = []
-    for e in legacy + entries:
+    for value, e in enumerate(legacy + entries):
         caps = e["caps"]
         if caps == "kReady":
             has = {"kStt", "kMt", "kTts"}
         else:
             has = {bit for bit in ("kStt", "kMt", "kTts") if bit in caps}
         items.append(dict(
-            id=e["enum"], name=e["name"], iso=e["iso"], nllb=e["nllb"],
+            value=value, id=e["enum"], name=e["name"], iso=e["iso"], nllb=e["nllb"],
             whisper=e["whisper"], nllb_id=e["id"],
             stt="kStt" in has, mt="kMt" in has, tts="kTts" in has,
         ))

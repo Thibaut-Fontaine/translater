@@ -73,6 +73,7 @@ cmake/             toolchain files, packaging helpers
 docker/            dev/test image, runtime image, compose stack
 docker/image/      SD image provisioner, verifier, systemd units
 images/            pinned Raspberry Pi OS / Docker / Compose versions
+mobile/            React Native app (Android built, iOS shell) — see its README
 scripts/           shell front-ends, each with a --self-test mode
 docs/              design notes that are not code
 third_party/       pinned vendored sources (never edited in place)
@@ -206,6 +207,14 @@ adapters            ALSA, libgpiod, whisper.cpp, ONNX Runtime, Piper
   `scripts/fetch_third_party.sh`: Piper's version read, its ONNX Runtime 1.22
   API use, the CLI target, and cross-compiler forwarding for espeak-ng and
   open_jtalk.
+- **The phone does not use SentencePiece.** NLLB's tokenizer is exported to a
+  12.6 MB blob by `scripts/gen_nllb_bpe.py` and read by `src/bpe.cpp`; the
+  platform (Kotlin `Normalizer`, `NSString`) does NFKC first. The merge rank is
+  part of the blob: reordering it changes the output, and the encoder has a
+  golden test against HuggingFace `tokenizers`.
+- **The phone captures audio natively.** `startVoice`/`stopVoice` keep samples
+  inside the native module; PCM must never cross the JS bridge. The C++ core is
+  still single-threaded: one worker in `XtransModule`, getters read a snapshot.
 
 ## 9. External components
 
@@ -260,6 +269,21 @@ adapters            ALSA, libgpiod, whisper.cpp, ONNX Runtime, Piper
   `debug` only. No utterance content is logged at default level.
 - A hung stage must time out and return to `idle`; the device never needs a
   reboot to recover.
+
+### Phone
+
+- `mobile/` shares `src/` and `include/xtrans/`; do not fork the core.
+- Android: `scripts/fetch_ort_android.sh` unpacks the pinned ONNX Runtime AAR
+  into gitignored paths; `mobile/android/app/src/main/cpp/CMakeLists.txt` lists
+  the core sources (no ALSA, GPIO, Piper or `ort_delay_load`).
+- Models are pushed with `scripts/push_models_android.sh` into
+  `/sdcard/Android/data/com.xtrans.app/files/models`; nothing is bundled.
+- The OS speech engine replaces Piper; do not add Piper to the app without
+  addressing GPL-3 distribution.
+- Build: `cd mobile && npm install && npx tsc --noEmit && npx jest`, then
+  `cd android && ./gradlew assembleRelease`. No device is attached on this
+  workstation; say so instead of claiming the app works.
+- iOS needs macOS; the bridge is documented in `docs/mobile-ios.md`.
 
 ## 11. Privacy and safety
 

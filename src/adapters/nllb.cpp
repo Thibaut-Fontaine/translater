@@ -1,9 +1,9 @@
 #include "xtrans/adapters/nllb.hpp"
 
 #include <onnxruntime/onnxruntime_cxx_api.h>
-#include <sentencepiece_processor.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 #include <exception>
 #include <optional>
@@ -11,6 +11,12 @@
 #include <vector>
 
 #include "xtrans/nllb_ids.hpp"
+
+#if XTRANS_NLLB_TOKENIZER_BPE
+#include "xtrans/bpe.hpp"
+#else
+#include <sentencepiece_processor.h>
+#endif
 
 namespace xtrans {
 namespace {
@@ -26,6 +32,25 @@ Ort::SessionOptions make_options(int threads) {
   options.SetGraphOptimizationLevel(ORT_ENABLE_ALL);
   return options;
 }
+
+#if XTRANS_NLLB_TOKENIZER_BPE
+bool load_blob(const char* path, std::vector<std::uint8_t>& out) {
+  if (path == nullptr) return false;
+  std::FILE* file = std::fopen(path, "rb");
+  if (file == nullptr) return false;
+  std::fseek(file, 0, SEEK_END);
+  const long size = std::ftell(file);
+  std::fseek(file, 0, SEEK_SET);
+  bool ok = false;
+  if (size > 0) {
+    out.resize(static_cast<std::size_t>(size));
+    ok = std::fread(out.data(), 1, out.size(), file) == out.size();
+    if (!ok) out.clear();
+  }
+  std::fclose(file);
+  return ok;
+}
+#endif
 
 std::int64_t argmax(const float* row, std::int64_t size) noexcept {
   std::int64_t best = 0;
@@ -107,7 +132,16 @@ struct NllbMt::Impl {
   std::unique_ptr<Ort::Session> decoder;            // first step, no cache
   std::unique_ptr<Ort::Session> decoder_with_past;  // later steps, KV cache
   Ort::MemoryInfo memory;
+#if XTRANS_NLLB_TOKENIZER_BPE
+  // No SentencePiece on Android/iOS: the merge table is exported once and the
+  // platform normalises (NFKC) before the text reaches this adapter.
+  std::vector<std::uint8_t> blob;
+  Bpe tokenizer;
+  std::vector<std::int32_t> bpe_pieces;
+  std::vector<char> decoded;
+#else
   sentencepiece::SentencePieceProcessor tokenizer;
+#endif
 
   std::vector<std::string> cache_inputs;  // past_key_values.*, cache order
   CacheIO first_io;
@@ -148,11 +182,18 @@ std::unique_ptr<NllbMt> NllbMt::open(const NllbConfig& config, std::string& erro
     impl.decoder_with_past =
         std::make_unique<Ort::Session>(impl.env, config.decoder_with_past, impl.options);
 
+#if XTRANS_NLLB_TOKENIZER_BPE
+    if (!load_blob(config.tokenizer, impl.blob) || !impl.tokenizer.load(impl.blob)) {
+      error = "cannot load the BPE vocabulary";
+      return nullptr;
+    }
+#else
     const auto tokenizer_status = impl.tokenizer.Load(config.tokenizer);
     if (!tokenizer_status.ok()) {
       error = tokenizer_status.ToString();
       return nullptr;
     }
+#endif
 
     if (!build_cache_io(*impl.decoder_with_past, impl.cache_inputs, true, impl.cached_io, error)) {
       return nullptr;
@@ -198,6 +239,19 @@ MtStatus NllbMt::translate(std::string_view text, Lang from, Lang to, std::span<
   try {
     auto& impl = *impl_;
 
+#if XTRANS_NLLB_TOKENIZER_BPE
+    impl.bpe_pieces.assign(text.size() + 8, 0);
+    const std::size_t bpe_count = impl.tokenizer.encode(text, impl.bpe_pieces);
+    if (bpe_count == 0 || bpe_count + 2 > kNllbMaxInput) return MtStatus::failed;
+    impl.bpe_pieces.resize(bpe_count);
+    impl.source_ids.resize(bpe_count + 2);
+    impl.source_ids[0] = source_lang;
+    for (std::size_t i = 0; i < bpe_count; ++i) {
+      impl.source_ids[i + 1] = impl.bpe_pieces[i];
+    }
+    impl.source_ids[bpe_count + 1] = kNllbEos;
+    const std::size_t source_len = impl.source_ids.size();
+#else
     impl.input_text.assign(text);
     impl.pieces.clear();
     if (!impl.tokenizer.Encode(impl.input_text, &impl.pieces).ok()) return MtStatus::failed;
@@ -207,6 +261,7 @@ MtStatus NllbMt::translate(std::string_view text, Lang from, Lang to, std::span<
         nllb_build_source_ids(impl.pieces, source_lang, impl.source_ids);
     if (source_len == 0 || source_len > kNllbMaxInput) return MtStatus::failed;
     impl.source_ids.resize(source_len);
+#endif
 
     const std::int64_t source_shape[2] = {1, static_cast<std::int64_t>(source_len)};
     impl.encoder_mask.assign(source_len, 1);
@@ -309,6 +364,18 @@ MtStatus NllbMt::translate(std::string_view text, Lang from, Lang to, std::span<
     }
 
     impl.last_tokens = impl.generated.size();
+#if XTRANS_NLLB_TOKENIZER_BPE
+    impl.token_ids.clear();
+    for (const std::int64_t id : impl.generated) {
+      if (id >= kNllbVocabSize || id == kNllbBos || id == kNllbPad || id == kNllbEos) continue;
+      impl.token_ids.push_back(static_cast<std::int32_t>(id));
+    }
+    impl.decoded.assign(impl.token_ids.size() * 4 + 32, '\0');
+    const std::size_t bytes =
+        impl.tokenizer.decode(impl.token_ids, impl.decoded);
+    if (bytes == 0) return MtStatus::failed;
+    impl.output_text.assign(impl.decoded.data(), bytes);
+#else
     impl.token_ids.resize(impl.generated.size());
     const std::size_t piece_count = nllb_filter_output(impl.generated, impl.token_ids);
     impl.sp_ids.assign(impl.token_ids.begin(),
@@ -317,6 +384,7 @@ MtStatus NllbMt::translate(std::string_view text, Lang from, Lang to, std::span<
     impl.output_text.clear();
     if (!impl.tokenizer.Decode(impl.sp_ids, &impl.output_text).ok()) return MtStatus::failed;
     if (impl.output_text.empty()) return MtStatus::failed;
+#endif
 
     const std::size_t take = std::min(impl.output_text.size(), out.size());
     std::memcpy(out.data(), impl.output_text.data(), take);

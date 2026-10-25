@@ -61,6 +61,7 @@ option(XTRANS_WITH_NLLB "Build the NLLB translation adapter" ${XTRANS_NLLB_DEFAU
 add_library(xtrans STATIC
   src/audio.cpp
   src/audio_convert.cpp
+  src/bpe.cpp
   src/buttons.cpp
   src/control.cpp
   src/device.cpp
@@ -227,6 +228,7 @@ if(XTRANS_BUILD_TESTS)
   add_executable(xtrans_tests
     tests/main.cpp
     tests/test_audio.cpp
+    tests/test_bpe.cpp
     tests/test_convert.cpp
     tests/test_buttons.cpp
     tests/test_control.cpp
