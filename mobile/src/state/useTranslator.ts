@@ -62,6 +62,10 @@ export function useTranslator() {
 
   const busy = useRef(false);
   const poll = useRef<ReturnType<typeof setInterval> | null>(null);
+  // A quick tap can release the button while the permission dialog is still
+  // open. The counter lets finishVoice invalidate a start that has not reached
+  // the native side yet, instead of leaving a recorder running.
+  const turn = useRef(0);
 
   const refreshModels = useCallback(() => {
     try {
@@ -88,18 +92,12 @@ export function useTranslator() {
     open();
   }, [open]);
 
-  const configure = useCallback(
-    (a: Language, b: Language, mode: number): boolean => {
-      if (!canTranslate(a, b)) {
-        setError(errorForStatus(SESSION_STATUS.unsupportedPair));
-        return false;
-      }
-      const ok = NativeSession.configure(a.value, b.value, mode);
-      if (!ok) setError(errorForStatus(SESSION_STATUS.unsupportedPair));
-      return ok;
-    },
-    [],
-  );
+  const configure = useCallback((a: Language, b: Language, mode: number): boolean => {
+    if (!canTranslate(a, b)) return false;
+    // The core refuses while a turn is open; that is not an error worth
+    // showing when the user simply changed a language mid-recording.
+    return NativeSession.configure(a.value, b.value, mode);
+  }, []);
 
   useEffect(() => {
     if (load !== 'ready') return;
@@ -156,27 +154,36 @@ export function useTranslator() {
       setError('Microphone permission is required to translate speech.');
       return;
     }
-    if (!configure(from, to, SPEECH_MODE)) return;
+    const ticket = ++turn.current;
+    try {
+      if (!NativeSession.startVoice()) {
+        setError(errorForStatus(SESSION_STATUS.busy));
+        return;
+      }
+    } catch (e) {
+      setError(String(e));
+      return;
+    }
+    // Released while the permission check or startVoice was in flight: the
+    // native recorder must not be left running.
+    if (ticket !== turn.current) {
+      NativeSession.cancel();
+      return;
+    }
 
     busy.current = true;
     setTranscript('');
     setTranslation('');
-    try {
-      if (!NativeSession.startVoice()) {
-        busy.current = false;
-        setError(errorForStatus(SESSION_STATUS.busy));
-        return;
-      }
-      setPhase('recording');
-      startPolling();
-    } catch (e) {
-      busy.current = false;
-      setError(String(e));
-    }
+    setPhase('recording');
+    startPolling();
   }, [configure, from, load, startPolling, to]);
 
   const finishVoice = useCallback(async () => {
-    if (!busy.current) return;
+    if (!busy.current) {
+      turn.current += 1;
+      return;
+    }
+    turn.current += 1;
     busy.current = false;
     stopPolling();
     try {
@@ -201,7 +208,10 @@ export function useTranslator() {
         setError('Models are not loaded yet.');
         return;
       }
-      if (!configure(from, to, TEXT_MODE)) return;
+      if (!configure(from, to, TEXT_MODE)) {
+        setError(errorForStatus(SESSION_STATUS.unsupportedPair));
+        return;
+      }
 
       busy.current = true;
       setError(null);
@@ -225,6 +235,7 @@ export function useTranslator() {
   );
 
   const cancel = useCallback(() => {
+    turn.current += 1;
     try {
       NativeSession.cancel();
     } catch {

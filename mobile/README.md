@@ -60,6 +60,10 @@ scripts/push_models_android.sh
 Open the app: the dot next to the title turns green when the models load.
 `Models` lists each file with its size.
 
+The release build is signed with the template's debug keystore so it can be
+sideloaded. Generate a real keystore before distributing it to anyone else;
+nothing in the app needs a Play Store upload.
+
 Development build with Metro:
 
 ```bash
