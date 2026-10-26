@@ -55,6 +55,7 @@ class XtransModule(private val reactContext: ReactApplicationContext) :
 
   private var tts: TextToSpeech? = null
   @Volatile private var ttsReady = false
+  @Volatile private var openFailure: String? = null
 
   // Downloads: one at a time, resumable, verified against the published digest.
   private data class ModelSpec(
@@ -126,7 +127,22 @@ class XtransModule(private val reactContext: ReactApplicationContext) :
   override fun openModels(modelsDir: String, promise: Promise) {
     worker.execute {
       closeHandle()
-      val opened = nativeOpen(modelsDir)
+      val manager =
+        reactContext.getSystemService(android.content.Context.ACTIVITY_SERVICE) as
+          android.app.ActivityManager
+      val info = android.app.ActivityManager.MemoryInfo()
+      manager.getMemoryInfo(info)
+      // NLLB int8 is 1.26 GB of weights. Keeping all three sessions resident
+      // needs ~2.5 GB peak; a 4 GB phone does not survive that. Below 6 GB of
+      // total RAM the adapter opens one session at a time (~500 MB peak).
+      val cacheSessions = info.totalMem >= 6_000_000_000L
+      if (info.availMem < 800_000_000L) {
+        openFailure = "Not enough free memory (need about 800 MB)."
+        promise.resolve(false)
+        return@execute
+      }
+      openFailure = null
+      val opened = nativeOpen(modelsDir, cacheSessions)
       handle = opened
       promise.resolve(opened != 0L)
     }
@@ -468,7 +484,8 @@ class XtransModule(private val reactContext: ReactApplicationContext) :
 
   override fun lastError(): String {
     val h = handle
-    return if (h == 0L) normalizedOpenError() else nativeLastError(h)
+    if (h == 0L) return openFailure ?: normalizedOpenError()
+    return nativeLastError(h)
   }
 
   private fun normalizedOpenError(): String = nativeOpenError()
@@ -509,7 +526,7 @@ class XtransModule(private val reactContext: ReactApplicationContext) :
 
   // --- JNI -----------------------------------------------------------------
 
-  private external fun nativeOpen(modelsDir: String): Long
+  private external fun nativeOpen(modelsDir: String, cacheSessions: Boolean): Long
   private external fun nativeOpenError(): String
   private external fun nativeReady(handle: Long): Boolean
   private external fun nativeClose(handle: Long)

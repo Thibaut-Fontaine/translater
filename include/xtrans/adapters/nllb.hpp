@@ -18,8 +18,12 @@ struct NllbConfig {
   const char* encoder = nullptr;           // encoder_model_int8.onnx
   const char* decoder = nullptr;           // decoder_model_quantized.onnx (first step)
   const char* decoder_with_past = nullptr; // decoder_with_past_model_quantized.onnx
-  const char* tokenizer = nullptr;         // sentencepiece.bpe.model
+  const char* tokenizer = nullptr;         // sentencepiece.bpe.model or the BPE blob
   int threads = 4;
+  // True on devices with room for all three sessions (~1.3 GB). False opens
+  // one session per stage and releases it, which keeps the peak near 500 MB
+  // but costs a re-read of the weights on the next turn.
+  bool cache_sessions = true;
 };
 
 // NLLB-200-distilled-600M as an ONNX encoder/decoder pair.
@@ -45,6 +49,9 @@ class NllbMt final : public Mt {
 
  private:
   NllbMt();
+  bool ensure_encoder(std::string& error) noexcept;
+  bool ensure_decoder(std::string& error) noexcept;
+  bool ensure_with_past(std::string& error) noexcept;
   struct Impl;
   std::unique_ptr<Impl> impl_;
 };

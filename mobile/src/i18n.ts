@@ -45,6 +45,8 @@ const en = {
   failedState: 'Failed',
   cancelledState: 'Cancelled',
   modelsNotInstalled: 'Models are not installed. Open the Models tab to download them.',
+  notEnoughMemory:
+    'Not enough free memory to load the models. Close other apps and try again.',
 
   modelsFolder: 'Models folder',
   retry: 'Reload models',
@@ -130,6 +132,8 @@ const fr: typeof en = {
   cancelledState: 'Annulé',
   modelsNotInstalled:
     "Les modèles ne sont pas installés. Ouvrez l'onglet Modèles pour les télécharger.",
+  notEnoughMemory:
+    "Mémoire libre insuffisante pour charger les modèles. Fermez d'autres applications et réessayez.",
 
   modelsFolder: 'Dossier des modèles',
   retry: 'Recharger',
@@ -191,6 +195,7 @@ const errorKeys: Record<string, StringKey> = {
   'This language has no speech recognition. Type instead.': 'speechUnavailable',
   'Microphone permission is required to translate speech.': 'micDenied',
   'Models are not installed.': 'modelsNotInstalled',
+  'Not enough free memory (need about 800 MB).': 'notEnoughMemory',
 };
 
 export function errorKey(message: string | null): StringKey {

@@ -289,6 +289,10 @@ adapters            ALSA, libgpiod, whisper.cpp, ONNX Runtime, Piper
   `scripts/push_models_android.sh` into
   `/sdcard/Android/data/com.xtrans.app/files/models`; nothing is bundled. The
   URLs and digests live only in `XtransModule.kt`; keep them pinned.
+- NLLB int8 is 1.26 GB of weights. Keeping the three sessions resident needs
+  ~2.5 GB peak, which kills a 4 GB phone silently. Below 6 GB of total RAM the
+  adapter opens one session at a time and releases it; do not "optimise" that
+  back into three resident sessions without measuring on a 4 GB device.
 - The OS speech engine replaces Piper; do not add Piper to the app without
   addressing GPL-3 distribution.
 - Build: `cd mobile && npm install && npx tsc --noEmit && npx jest`, then

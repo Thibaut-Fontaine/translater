@@ -143,7 +143,8 @@ int worker_threads() {
 extern "C" {
 
 JNIEXPORT jlong JNICALL
-Java_com_xtrans_app_XtransModule_nativeOpen(JNIEnv* env, jobject, jstring models_dir) {
+Java_com_xtrans_app_XtransModule_nativeOpen(JNIEnv* env, jobject, jstring models_dir,
+                                             jboolean cache_sessions) {
   auto bridge = std::make_unique<Bridge>();
   bridge->dir = from_java(env, models_dir);
 
@@ -173,6 +174,7 @@ Java_com_xtrans_app_XtransModule_nativeOpen(JNIEnv* env, jobject, jstring models
   config.decoder_with_past = with_past.c_str();
   config.tokenizer = tokenizer.c_str();
   config.threads = worker_threads();
+  config.cache_sessions = cache_sessions == JNI_TRUE ? true : false;
 
   bridge->mt = xtrans::NllbMt::open(config, error);
   if (!bridge->mt) {

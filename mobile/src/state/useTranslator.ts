@@ -154,7 +154,15 @@ export function useTranslator() {
       loadRef.current = opened ? 'ready' : 'failed';
       setLoad(loadRef.current);
       refreshModels();
-      if (!opened) setError('Models could not be loaded.');
+      if (!opened) {
+        let why = '';
+        try {
+          why = session.lastError();
+        } catch {
+          why = '';
+        }
+        setError(why.length > 0 ? why : 'Models could not be loaded.');
+      }
       return opened;
     } catch (e) {
       loadRef.current = 'failed';

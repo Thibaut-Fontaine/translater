@@ -88,6 +88,29 @@ Verified on the emulator (release build): the app starts, the native module
 answers, text mode reaches `translate()`, and a missing models directory is
 reported instead of crashing. Not yet re-verified on the phone.
 
+## 0.2 Memory on a 4 GB phone (0.2.1)
+
+Loading NLLB closed the app on a 4 GB phone. The adapter opened all three ONNX
+sessions at once: 415 + 470 + 445 MB of int8 weights, ~2.5 GB peak with
+activations, above what Android leaves to an app on 4 GB. The low-memory killer
+does not raise an exception, so the process simply disappeared.
+
+From 0.2.1, when `totalMem < 6 GB`:
+
+- one session at a time: encoder → free, first-step decoder → free, KV-cache
+  decoder → free at the end of the turn (~500 MB peak);
+- the encoder's hidden states are copied (~a few MB) so the encoder can be
+  released before decoding;
+- `session.use_env_allocators=1`, no CPU arena, no memory pattern, so cache
+  tensors outlive their session and freed blocks go back to the OS;
+- the cost is re-reading the weights each turn (a few seconds on flash);
+- `openModels` refuses with *"Not enough free memory (need about 800 MB)"*
+  when `availMem` is below that, instead of being killed silently.
+
+On a 2 GB emulator this now reaches *Translating…* where 0.2.0 was killed at
+load; the emulator host ran out of memory during inference, so a full
+translation on constrained hardware is still unverified.
+
 ---
 
 ## 1. Goal
