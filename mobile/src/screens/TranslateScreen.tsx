@@ -221,6 +221,7 @@ function describeError(message: string, locale: Locale): string {
     'This language has no speech recognition. Type instead.': 'speechUnavailable',
     'Microphone permission is required to translate speech.': 'micDenied',
     'Models are not installed.': 'modelsNotInstalled',
+    'Not enough free memory (need about 800 MB).': 'notEnoughMemory',
   };
   const key = map[message];
   return key !== undefined ? t(locale, key) : message;

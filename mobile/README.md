@@ -117,6 +117,9 @@ The C++ side keeps its own suite at the repository root (`ctest`).
 - **NFKC in the platform.** `java.text.Normalizer` normalises before the C++
   BPE encoder; SentencePiece is not built for Android, and its exact `nmt_nfkc`
   table is replaced by the platform's Unicode implementation.
+- **4 GB phones take a slower path.** Below 6 GB of RAM the NLLB adapter opens
+  one ONNX session at a time (~500 MB peak) instead of keeping all three
+  (~2.5 GB peak); the weights are re-read on each turn.
 - **Models download from the app.** The native side owns the pinned URLs and
   digests, downloads one file at a time with `Range` resume, verifies SHA-256
   and renames `.part` only on success. NLLB comes from Hugging Face (CC-BY-NC),

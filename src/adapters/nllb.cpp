@@ -26,10 +26,17 @@ constexpr std::size_t kNllbMaxInput = 1024;  // trained position limit
 constexpr const char* kPastPrefix = "past_key_values.";
 constexpr const char* kPresentPrefix = "present.";
 
-Ort::SessionOptions make_options(int threads) {
+Ort::SessionOptions make_options(int threads, bool cache_sessions) {
   Ort::SessionOptions options;
   options.SetIntraOpNumThreads(threads);
   options.SetGraphOptimizationLevel(ORT_ENABLE_ALL);
+  if (!cache_sessions) {
+    // Low-memory devices: do not hold freed blocks, and let output tensors
+    // (the KV cache) outlive the session that produced them.
+    options.DisableCpuMemArena();
+    options.DisableMemPattern();
+    options.AddConfigEntry("session.use_env_allocators", "1");
+  }
   return options;
 }
 
@@ -123,10 +130,16 @@ bool build_cache_io(Ort::Session& session, std::vector<std::string>& cache_input
 struct NllbMt::Impl {
   explicit Impl(int threads)
       : env(ORT_LOGGING_LEVEL_WARNING, "xtrans"),
-        options(make_options(threads)),
+        options(make_options(threads, true)),
         memory(Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault)) {}
 
   Ort::Env env;
+  std::string encoder_path;
+  std::string decoder_path;
+  std::string with_past_path;
+  bool cache_sessions = true;
+  std::string error_scratch;
+  std::vector<float> hidden_copy;
   Ort::SessionOptions options;
   std::unique_ptr<Ort::Session> encoder;
   std::unique_ptr<Ort::Session> decoder;            // first step, no cache
@@ -176,11 +189,21 @@ std::unique_ptr<NllbMt> NllbMt::open(const NllbConfig& config, std::string& erro
 
   try {
     auto& impl = *self->impl_;
-    impl.options = make_options(config.threads);
-    impl.encoder = std::make_unique<Ort::Session>(impl.env, config.encoder, impl.options);
-    impl.decoder = std::make_unique<Ort::Session>(impl.env, config.decoder, impl.options);
-    impl.decoder_with_past =
-        std::make_unique<Ort::Session>(impl.env, config.decoder_with_past, impl.options);
+    impl.options = make_options(config.threads, config.cache_sessions);
+    impl.cache_sessions = config.cache_sessions;
+    impl.encoder_path = config.encoder != nullptr ? config.encoder : "";
+    impl.decoder_path = config.decoder != nullptr ? config.decoder : "";
+    impl.with_past_path = config.decoder_with_past != nullptr ? config.decoder_with_past : "";
+    if (impl.encoder_path.empty() || impl.decoder_path.empty() || impl.with_past_path.empty()) {
+      error = "missing ONNX model path";
+      return nullptr;
+    }
+    if (config.cache_sessions) {
+      impl.encoder = std::make_unique<Ort::Session>(impl.env, impl.encoder_path.c_str(), impl.options);
+      impl.decoder = std::make_unique<Ort::Session>(impl.env, impl.decoder_path.c_str(), impl.options);
+      impl.decoder_with_past = std::make_unique<Ort::Session>(
+          impl.env, impl.with_past_path.c_str(), impl.options);
+    }
 
 #if XTRANS_NLLB_TOKENIZER_BPE
     if (!load_blob(config.tokenizer, impl.blob) || !impl.tokenizer.load(impl.blob)) {
@@ -195,18 +218,19 @@ std::unique_ptr<NllbMt> NllbMt::open(const NllbConfig& config, std::string& erro
     }
 #endif
 
-    if (!build_cache_io(*impl.decoder_with_past, impl.cache_inputs, true, impl.cached_io, error)) {
-      return nullptr;
+    if (config.cache_sessions) {
+      if (!build_cache_io(*impl.decoder_with_past, impl.cache_inputs, true, impl.cached_io, error)) {
+        return nullptr;
+      }
+      if (!build_cache_io(*impl.decoder, impl.cache_inputs, false, impl.first_io, error)) {
+        return nullptr;
+      }
+      if (impl.first_io.slots.size() != impl.cache_inputs.size()) {
+        error = "first-step decoder does not fill the whole cache";
+        return nullptr;
+      }
+      impl.cache.resize(impl.cache_inputs.size());
     }
-    if (!build_cache_io(*impl.decoder, impl.cache_inputs, false, impl.first_io, error)) {
-      return nullptr;
-    }
-    if (impl.first_io.slots.size() != impl.cache_inputs.size()) {
-      error = "first-step decoder does not fill the whole cache";
-      return nullptr;
-    }
-
-    impl.cache.resize(impl.cache_inputs.size());
     impl.updated.assign(impl.cache_inputs.size(), false);
     impl.pieces.reserve(256);
     impl.generated.reserve(kMaxNewTokens);
@@ -221,6 +245,71 @@ std::unique_ptr<NllbMt> NllbMt::open(const NllbConfig& config, std::string& erro
   }
 
   return self;
+}
+
+bool NllbMt::ensure_encoder(std::string& error) noexcept {
+  auto& impl = *impl_;
+  if (impl.encoder) return true;
+  try {
+    impl.encoder =
+        std::make_unique<Ort::Session>(impl.env, impl.encoder_path.c_str(), impl.options);
+    return true;
+  } catch (const std::exception& e) {
+    error = e.what();
+  } catch (...) {
+    error = "cannot open the encoder";
+  }
+  return false;
+}
+
+bool NllbMt::ensure_decoder(std::string& error) noexcept {
+  auto& impl = *impl_;
+  if (impl.decoder) return true;
+  // The cache order comes from the with-past decoder's inputs; in low-memory
+  // mode it is opened once just to learn that order, then released.
+  if (impl.cache_inputs.empty()) {
+    if (!ensure_with_past(error)) return false;
+    if (!impl.cache_sessions) impl.decoder_with_past.reset();
+  }
+  try {
+    impl.decoder =
+        std::make_unique<Ort::Session>(impl.env, impl.decoder_path.c_str(), impl.options);
+    if (!build_cache_io(*impl.decoder, impl.cache_inputs, false, impl.first_io, error)) {
+      impl.decoder.reset();
+      return false;
+    }
+    if (impl.first_io.slots.size() != impl.cache_inputs.size()) {
+      error = "first-step decoder does not fill the whole cache";
+      impl.decoder.reset();
+      return false;
+    }
+    impl.cache.resize(impl.cache_inputs.size());
+    return true;
+  } catch (const std::exception& e) {
+    error = e.what();
+  } catch (...) {
+    error = "cannot open the decoder";
+  }
+  return false;
+}
+
+bool NllbMt::ensure_with_past(std::string& error) noexcept {
+  auto& impl = *impl_;
+  if (impl.decoder_with_past) return true;
+  try {
+    impl.decoder_with_past =
+        std::make_unique<Ort::Session>(impl.env, impl.with_past_path.c_str(), impl.options);
+    if (!build_cache_io(*impl.decoder_with_past, impl.cache_inputs, true, impl.cached_io, error)) {
+      impl.decoder_with_past.reset();
+      return false;
+    }
+    return true;
+  } catch (const std::exception& e) {
+    error = e.what();
+  } catch (...) {
+    error = "cannot open the cached decoder";
+  }
+  return false;
 }
 
 MtStatus NllbMt::translate(std::string_view text, Lang from, Lang to, std::span<char> out,
@@ -273,12 +362,18 @@ MtStatus NllbMt::translate(std::string_view text, Lang from, Lang to, std::span<
     const char* encoder_outputs[] = {"last_hidden_state"};
     Ort::Value encoder_feed[] = {std::move(source_tensor), std::move(mask_tensor)};
 
+    if (!ensure_encoder(impl.error_scratch)) return MtStatus::failed;
     auto encoded = impl.encoder->Run(Ort::RunOptions{nullptr}, encoder_inputs, encoder_feed, 2,
                                      encoder_outputs, 1);
     const auto hidden_info = encoded[0].GetTensorTypeAndShapeInfo();
     const std::vector<std::int64_t> hidden_shape = hidden_info.GetShape();
-    float* hidden = encoded[0].GetTensorMutableData<float>();
+    const float* hidden = encoded[0].GetTensorData<float>();
     const std::size_t hidden_count = static_cast<std::size_t>(hidden_info.GetElementCount());
+
+    // Copy the hidden states so the encoder session can be released before
+    // decoding (low-memory mode); the copy is tiny compared with the weights.
+    impl.hidden_copy.assign(hidden, hidden + hidden_count);
+    if (!impl.cache_sessions) impl.encoder.reset();
 
     const std::int64_t decoder_mask_shape[2] = {1, hidden_shape[1]};
     impl.encoder_mask.assign(static_cast<std::size_t>(hidden_shape[1]), 1);
@@ -292,10 +387,10 @@ MtStatus NllbMt::translate(std::string_view text, Lang from, Lang to, std::span<
     cached_input_names.reserve(2 + impl.cache_inputs.size());
     for (const auto& name : impl.cache_inputs) cached_input_names.push_back(name.c_str());
 
+    if (!ensure_decoder(impl.error_scratch)) return MtStatus::failed;
     std::vector<const char*> first_outputs;
     for (const auto& name : impl.first_io.request) first_outputs.push_back(name.c_str());
     std::vector<const char*> cached_outputs;
-    for (const auto& name : impl.cached_io.request) cached_outputs.push_back(name.c_str());
 
     std::vector<Ort::Value> feed;
     feed.reserve(cached_input_names.size());
@@ -312,13 +407,18 @@ MtStatus NllbMt::translate(std::string_view text, Lang from, Lang to, std::span<
       std::vector<Ort::Value> decoded;
       if (!cached) {
         Ort::Value hidden_value = Ort::Value::CreateTensor<float>(
-            impl.memory, hidden, hidden_count, hidden_shape.data(), hidden_shape.size());
+            impl.memory, impl.hidden_copy.data(), hidden_count, hidden_shape.data(),
+            hidden_shape.size());
         const char* names[] = {"encoder_attention_mask", "input_ids", "encoder_hidden_states"};
         Ort::Value values[] = {std::move(mask_value), std::move(ids_value),
                                std::move(hidden_value)};
         decoded = impl.decoder->Run(Ort::RunOptions{nullptr}, names, values, 3,
                                     first_outputs.data(), first_outputs.size());
       } else {
+        if (!ensure_with_past(impl.error_scratch)) return MtStatus::failed;
+        if (cached_outputs.empty()) {
+          for (const auto& name : impl.cached_io.request) cached_outputs.push_back(name.c_str());
+        }
         std::fill(impl.updated.begin(), impl.updated.end(), false);
         feed.clear();
         feed.push_back(std::move(mask_value));
@@ -389,6 +489,10 @@ MtStatus NllbMt::translate(std::string_view text, Lang from, Lang to, std::span<
     const std::size_t take = std::min(impl.output_text.size(), out.size());
     std::memcpy(out.data(), impl.output_text.data(), take);
     written = take;
+    if (!impl.cache_sessions) {
+      impl.decoder.reset();
+      impl.decoder_with_past.reset();
+    }
     return MtStatus::ok;
   } catch (const std::exception&) {
     return MtStatus::failed;
