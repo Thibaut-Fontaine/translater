@@ -18,6 +18,7 @@ import {
   errorForStatus,
   phaseFromState,
 } from './sessionMachine';
+import {ModelStatus, allReady, anyDownloading, parseModels} from '../models/manifest';
 
 /**
  * `idle` means the native module is registered but the 1.4 GB of models have
@@ -61,6 +62,7 @@ export function useTranslator() {
     NativeSession === null ? 'unavailable' : 'idle',
   );
   const [models, setModels] = useState<ModelStatus[]>([]);
+  const [downloading, setDownloading] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(true);
   const [draft, setDraft] = useState('');
 
@@ -75,11 +77,42 @@ export function useTranslator() {
   const refreshModels = useCallback(() => {
     if (NativeSession === null) return;
     try {
-      setModels(JSON.parse(NativeSession.modelsStatus()) as ModelStatus[]);
+      const parsed = parseModels(NativeSession.modelsStatus());
+      setModels(parsed);
+      setDownloading(anyDownloading(parsed));
     } catch {
       setModels([]);
+      setDownloading(false);
     }
   }, []);
+
+  // Missing files are downloaded from the Models tab; progress is polled only
+  // while something is in flight.
+  useEffect(() => {
+    if (!downloading || NativeSession === null) return;
+    const timer = setInterval(refreshModels, 500);
+    return () => clearInterval(timer);
+  }, [downloading, refreshModels]);
+
+  const startDownloads = useCallback(() => {
+    if (NativeSession === null) return;
+    try {
+      NativeSession.downloadModels();
+    } catch (e) {
+      setError(String(e));
+    }
+    refreshModels();
+  }, [refreshModels]);
+
+  const stopDownloads = useCallback(() => {
+    if (NativeSession === null) return;
+    try {
+      NativeSession.cancelDownloads();
+    } catch {
+      // Nothing to stop.
+    }
+    refreshModels();
+  }, [refreshModels]);
 
   // Cheap file check at startup; opening the models is a first-turn concern.
   useEffect(() => {
@@ -107,6 +140,11 @@ export function useTranslator() {
     }
     if (loadRef.current === 'ready') return true;
     if (loadRef.current === 'loading') return false;
+
+    if (!allReady(parseModels(session.modelsStatus()))) {
+      setError('Models are not installed.');
+      return false;
+    }
 
     loadRef.current = 'loading';
     setLoad('loading');
@@ -309,6 +347,7 @@ export function useTranslator() {
     error,
     load,
     models,
+    downloading,
     ttsEnabled,
     draft,
     setDraft,
@@ -322,9 +361,11 @@ export function useTranslator() {
     chooseTo,
     retryOpen: ensureModels,
     refreshModels,
+    startDownloads,
+    stopDownloads,
   };
 }
 
-export type ModelStatus = {name: string; present: boolean; bytes: number};
+export type {ModelStatus} from '../models/manifest';
 
 export type Translator = ReturnType<typeof useTranslator>;

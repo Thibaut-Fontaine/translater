@@ -220,6 +220,7 @@ function describeError(message: string, locale: Locale): string {
     'Models are not loaded yet.': 'notReady',
     'This language has no speech recognition. Type instead.': 'speechUnavailable',
     'Microphone permission is required to translate speech.': 'micDenied',
+    'Models are not installed.': 'modelsNotInstalled',
   };
   const key = map[message];
   return key !== undefined ? t(locale, key) : message;

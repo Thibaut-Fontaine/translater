@@ -15,8 +15,12 @@ export interface Spec extends TurboModule {
   isReady(): boolean;
   /** Where models must be pushed (app-private storage). */
   modelsDir(): string;
-  /** JSON array of {name, present, bytes} for the Models screen. */
+  /** JSON array of {name, present, bytes, state, received, total, error}. */
   modelsStatus(): string;
+
+  /** Starts the sequential, resumable download of the missing model files. */
+  downloadModels(): boolean;
+  cancelDownloads(): void;
 
   /** `from`/`to` are catalog values, `mode` is 1 (speech->text) or 2 (text->text). */
   configure(from: number, to: number, mode: number): boolean;

@@ -32,9 +32,9 @@ Deliberate deviations from the plan above:
   vocabulary; the blob is 12.6 MB and the encoder is 200 lines. NFKC is done by
   the platform (`java.text.Normalizer`, `NSString`), which is also what the
   SentencePiece `nmt_nfkc` table approximates.
-- **Models are pushed with adb**, not downloaded: `scripts/push_models_android.sh`
-  copies 1.4 GB into the app's external files directory. The in-app downloader
-  is still M15.
+- **Models download inside the app** (M15): the Models tab fetches 1.3 GB from
+  pinned URLs one file at a time, resumes with `Range`, verifies SHA-256 and
+  renames `.part` only on success. adb push remains the offline fallback.
 - **TTS is the OS engine**, so no Piper and no GPL question in the app.
 
 Still true, and blocking:
@@ -392,9 +392,9 @@ TDD is mandatory for the C++ core.
 - [x] Live transcript + translation, copy, OS voice replay.
 - [ ] Accessibility pass on a device (labels exist, never exercised).
 
-**M15 — Models**
-- [ ] In-app download with hashes, resume, cancel, delete.
-- [ ] Import path; storage accounting; backup exclusion.
+**M15 — Models** — **done**
+- [x] In-app download with pinned URLs and SHA-256, sequential, resumable, cancel.
+- [ ] Import path from Files; backup exclusion.
 
 **M16 — Device validation**
 - [ ] Android + iOS offline runs, both directions, text-only and speech modes.

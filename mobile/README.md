@@ -117,5 +117,9 @@ The C++ side keeps its own suite at the repository root (`ctest`).
 - **NFKC in the platform.** `java.text.Normalizer` normalises before the C++
   BPE encoder; SentencePiece is not built for Android, and its exact `nmt_nfkc`
   table is replaced by the platform's Unicode implementation.
+- **Models download from the app.** The native side owns the pinned URLs and
+  digests, downloads one file at a time with `Range` resume, verifies SHA-256
+  and renames `.part` only on success. NLLB comes from Hugging Face (CC-BY-NC),
+  Whisper from whisper.cpp (MIT), the tokenizer blob from this project's site.
 - **OS speech.** Android `TextToSpeech` / iOS `AVSpeechSynthesizer`; Piper stays
   a Pi feature because GPL-3 inside an app store build is a different problem.
