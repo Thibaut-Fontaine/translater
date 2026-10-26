@@ -285,8 +285,10 @@ adapters            ALSA, libgpiod, whisper.cpp, ONNX Runtime, Piper
 - Android: `scripts/fetch_ort_android.sh` unpacks the pinned ONNX Runtime AAR
   into gitignored paths; `mobile/android/app/src/main/cpp/CMakeLists.txt` lists
   the core sources (no ALSA, GPIO, Piper or `ort_delay_load`).
-- Models are pushed with `scripts/push_models_android.sh` into
-  `/sdcard/Android/data/com.xtrans.app/files/models`; nothing is bundled.
+- Models are downloaded by the app (resumable, SHA-256 verified) or pushed with
+  `scripts/push_models_android.sh` into
+  `/sdcard/Android/data/com.xtrans.app/files/models`; nothing is bundled. The
+  URLs and digests live only in `XtransModule.kt`; keep them pinned.
 - The OS speech engine replaces Piper; do not add Piper to the app without
   addressing GPL-3 distribution.
 - Build: `cd mobile && npm install && npx tsc --noEmit && npx jest`, then

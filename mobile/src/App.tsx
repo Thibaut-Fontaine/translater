@@ -67,7 +67,10 @@ export default function App() {
             models={translator.models}
             directory={safeModelsDir()}
             locale={locale}
+            downloading={translator.downloading}
             onRetry={translator.retryOpen}
+            onDownload={translator.startDownloads}
+            onCancel={translator.stopDownloads}
           />
         ) : null}
         {tab === 'settings' ? (

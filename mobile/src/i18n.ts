@@ -25,9 +25,27 @@ const en = {
   search: 'Search 200+ languages',
   models: 'Models',
   modelsHint:
-    'Everything runs on this phone. Push the model files once with adb; they are never uploaded.',
+    'Everything runs on this phone. Download the models once; nothing is uploaded.',
   modelPresent: 'installed',
   modelMissing: 'missing',
+  modelsInstalled: 'All model files are installed.',
+  modelsTotal: 'total, downloaded once',
+  modelsToDownload: 'to download',
+  downloadModels: 'Download models',
+  cancelDownload: 'Cancel download',
+  downloadHint:
+    'Over Wi-Fi, one file at a time. Downloads resume where they stopped; keep the app open until the last file is verified.',
+  downloadLicence:
+    'NLLB-200 is CC-BY-NC 4.0 (personal, non-commercial use). Whisper models are MIT. Files are verified against a SHA-256 digest.',
+  readyState: 'Installed',
+  missingState: 'Missing',
+  queuedState: 'Waiting…',
+  downloadingState: 'Downloading',
+  verifyingState: 'Verifying…',
+  failedState: 'Failed',
+  cancelledState: 'Cancelled',
+  modelsNotInstalled: 'Models are not installed. Open the Models tab to download them.',
+
   modelsFolder: 'Models folder',
   retry: 'Reload models',
   settings: 'Settings',
@@ -91,9 +109,28 @@ const fr: typeof en = {
   search: 'Rechercher parmi 200 langues',
   models: 'Modèles',
   modelsHint:
-    'Tout tourne sur ce téléphone. Copiez les modèles une fois avec adb ; ils ne sont jamais envoyés.',
+    'Tout tourne sur ce téléphone. Téléchargez les modèles une fois ; rien n’est envoyé.',
   modelPresent: 'installé',
   modelMissing: 'manquant',
+  modelsInstalled: 'Tous les modèles sont installés.',
+  modelsTotal: 'au total, téléchargés une fois',
+  modelsToDownload: 'à télécharger',
+  downloadModels: 'Télécharger les modèles',
+  cancelDownload: 'Annuler le téléchargement',
+  downloadHint:
+    'En Wi-Fi, un fichier à la fois. Le téléchargement reprend où il s’est arrêté ; gardez l’application ouverte jusqu’à la vérification du dernier fichier.',
+  downloadLicence:
+    'NLLB-200 est sous CC-BY-NC 4.0 (usage personnel, non commercial). Les modèles Whisper sont MIT. Chaque fichier est vérifié par empreinte SHA-256.',
+  readyState: 'Installé',
+  missingState: 'Manquant',
+  queuedState: 'En attente…',
+  downloadingState: 'Téléchargement',
+  verifyingState: 'Vérification…',
+  failedState: 'Échec',
+  cancelledState: 'Annulé',
+  modelsNotInstalled:
+    "Les modèles ne sont pas installés. Ouvrez l'onglet Modèles pour les télécharger.",
+
   modelsFolder: 'Dossier des modèles',
   retry: 'Recharger',
   settings: 'Réglages',
@@ -153,6 +190,7 @@ const errorKeys: Record<string, StringKey> = {
   'Models are not loaded yet.': 'notReady',
   'This language has no speech recognition. Type instead.': 'speechUnavailable',
   'Microphone permission is required to translate speech.': 'micDenied',
+  'Models are not installed.': 'modelsNotInstalled',
 };
 
 export function errorKey(message: string | null): StringKey {
