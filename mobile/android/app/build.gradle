@@ -82,8 +82,8 @@ android {
         applicationId "com.xtrans.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 5
-        versionName "0.2.2"
+        versionCode 6
+        versionName "0.2.3"
 
         // ABIs come from reactNativeArchitectures in gradle.properties
         // (arm64 for release, x86_64 for the emulator via -P).

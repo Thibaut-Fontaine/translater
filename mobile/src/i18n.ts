@@ -66,6 +66,8 @@ const en = {
   notReady: 'Models are not ready.',
   speechUnavailable: 'This language has no speech recognition. Type instead.',
   micDenied: 'Microphone permission is required to translate speech.',
+  micDeniedHint:
+    'Microphone permission denied. You can still type; allow it in Android settings for voice.',
   busy: 'A turn is already running.',
   textOnly: 'text only',
   voiceIn: 'voice in',
@@ -156,6 +158,8 @@ const fr: typeof en = {
   speechUnavailable:
     "Cette langue n'a pas de reconnaissance vocale. Écrivez plutôt.",
   micDenied: 'Le micro est nécessaire pour traduire la parole.',
+  micDeniedHint:
+    'Micro refusé. Vous pouvez écrire ; autorisez-le dans les réglages Android pour la voix.',
   busy: 'Une traduction est déjà en cours.',
   textOnly: 'texte seul',
   voiceIn: 'voix',

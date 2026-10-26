@@ -28,6 +28,8 @@ import {ModelStatus, allReady, anyDownloading, parseModels} from '../models/mani
  */
 export type LoadState = 'unavailable' | 'idle' | 'loading' | 'ready' | 'failed';
 
+export type MicPermission = 'unknown' | 'granted' | 'denied';
+
 const SPEECH_MODE = 1; // speech_to_text
 const TEXT_MODE = 2; // text_to_text
 
@@ -65,6 +67,7 @@ export function useTranslator() {
   const [downloading, setDownloading] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(true);
   const [draft, setDraft] = useState('');
+  const [micPermission, setMicPermission] = useState<MicPermission>('unknown');
 
   const busy = useRef(false);
   const poll = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -113,6 +116,22 @@ export function useTranslator() {
     }
     refreshModels();
   }, [refreshModels]);
+
+  // Ask for the microphone when the app starts, so the dialog never lands in
+  // the middle of a press-to-talk gesture.
+  useEffect(() => {
+    let alive = true;
+    ensureMicrophone()
+      .then(granted => {
+        if (alive) setMicPermission(granted ? 'granted' : 'denied');
+      })
+      .catch(() => {
+        if (alive) setMicPermission('denied');
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // Cheap file check at startup; opening the models is a first-turn concern.
   useEffect(() => {
@@ -227,10 +246,16 @@ export function useTranslator() {
       setError('This language has no speech recognition. Type instead.');
       return;
     }
-    if (!(await ensureMicrophone())) {
+    if (micPermission === 'denied') {
       setError('Microphone permission is required to translate speech.');
       return;
     }
+    if (!(await ensureMicrophone())) {
+      setMicPermission('denied');
+      setError('Microphone permission is required to translate speech.');
+      return;
+    }
+    setMicPermission('granted');
     if (!(await ensureModels())) {
       setError('Models could not be loaded.');
       return;
@@ -266,7 +291,7 @@ export function useTranslator() {
     setTranslation('');
     setPhase('recording');
     startPolling();
-  }, [configure, ensureModels, from, startPolling, to]);
+  }, [configure, ensureModels, from, micPermission, startPolling, to]);
 
   const finishVoice = useCallback(async () => {
     if (!busy.current) {
@@ -381,6 +406,7 @@ export function useTranslator() {
     models,
     downloading,
     ttsEnabled,
+    micPermission,
     draft,
     setDraft,
     setTtsEnabled,
