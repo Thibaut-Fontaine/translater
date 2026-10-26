@@ -19,7 +19,13 @@ import {
   phaseFromState,
 } from './sessionMachine';
 
-export type LoadState = 'opening' | 'ready' | 'failed' | 'missing';
+/**
+ * `idle` means the native module is registered but the 1.4 GB of models have
+ * not been opened yet. They are opened on the first turn, never at launch:
+ * allocating three ONNX sessions before the first frame is how the app gets
+ * killed by the low memory killer on a phone.
+ */
+export type LoadState = 'unavailable' | 'idle' | 'loading' | 'ready' | 'failed';
 
 const SPEECH_MODE = 1; // speech_to_text
 const TEXT_MODE = 2; // text_to_text
@@ -43,11 +49,7 @@ async function ensureMicrophone(): Promise<boolean> {
   return result === PermissionsAndroid.RESULTS.GRANTED;
 }
 
-/**
- * Owns one session for the whole app: languages, turn state, results and the
- * OS voice. The C++ core is single-threaded, so every call goes through the
- * native module's worker without racing.
- */
+/** Owns one session for the whole app. */
 export function useTranslator() {
   const [from, setFrom] = useState<Language>(DEFAULT_FROM);
   const [to, setTo] = useState<Language>(DEFAULT_TO);
@@ -55,19 +57,23 @@ export function useTranslator() {
   const [transcript, setTranscript] = useState('');
   const [translation, setTranslation] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [load, setLoad] = useState<LoadState>('opening');
+  const [load, setLoad] = useState<LoadState>(
+    NativeSession === null ? 'unavailable' : 'idle',
+  );
   const [models, setModels] = useState<ModelStatus[]>([]);
   const [ttsEnabled, setTtsEnabled] = useState(true);
   const [draft, setDraft] = useState('');
 
   const busy = useRef(false);
   const poll = useRef<ReturnType<typeof setInterval> | null>(null);
+  const loadRef = useRef<LoadState>(NativeSession === null ? 'unavailable' : 'idle');
   // A quick tap can release the button while the permission dialog is still
   // open. The counter lets finishVoice invalidate a start that has not reached
   // the native side yet, instead of leaving a recorder running.
   const turn = useRef(0);
 
   const refreshModels = useCallback(() => {
+    if (NativeSession === null) return;
     try {
       setModels(JSON.parse(NativeSession.modelsStatus()) as ModelStatus[]);
     } catch {
@@ -75,29 +81,50 @@ export function useTranslator() {
     }
   }, []);
 
-  const open = useCallback(async () => {
-    setLoad('opening');
-    try {
-      const dir = NativeSession.modelsDir();
-      const ok = await NativeSession.openModels(dir);
-      setLoad(ok ? 'ready' : 'failed');
-      refreshModels();
-    } catch (e) {
-      setLoad('failed');
-      setError(String(e));
+  // Cheap file check at startup; opening the models is a first-turn concern.
+  useEffect(() => {
+    if (NativeSession === null) {
+      setLoad('unavailable');
+      return;
     }
+    refreshModels();
   }, [refreshModels]);
 
-  useEffect(() => {
-    open();
-  }, [open]);
-
   const configure = useCallback((a: Language, b: Language, mode: number): boolean => {
+    if (NativeSession === null) return false;
     if (!canTranslate(a, b)) return false;
     // The core refuses while a turn is open; that is not an error worth
     // showing when the user simply changed a language mid-recording.
     return NativeSession.configure(a.value, b.value, mode);
   }, []);
+
+  const ensureModels = useCallback(async (): Promise<boolean> => {
+    const session = NativeSession;
+    if (session === null) {
+      loadRef.current = 'unavailable';
+      setLoad('unavailable');
+      return false;
+    }
+    if (loadRef.current === 'ready') return true;
+    if (loadRef.current === 'loading') return false;
+
+    loadRef.current = 'loading';
+    setLoad('loading');
+    setError(null);
+    try {
+      const opened = await session.openModels(session.modelsDir());
+      loadRef.current = opened ? 'ready' : 'failed';
+      setLoad(loadRef.current);
+      refreshModels();
+      if (!opened) setError('Models could not be loaded.');
+      return opened;
+    } catch (e) {
+      loadRef.current = 'failed';
+      setLoad('failed');
+      setError(String(e));
+      return false;
+    }
+  }, [refreshModels]);
 
   useEffect(() => {
     if (load !== 'ready') return;
@@ -112,6 +139,7 @@ export function useTranslator() {
   }, []);
 
   const readResult = useCallback(() => {
+    if (NativeSession === null) return;
     setTranscript(NativeSession.transcript());
     setTranslation(NativeSession.translation());
   }, []);
@@ -119,8 +147,8 @@ export function useTranslator() {
   const startPolling = useCallback(() => {
     stopPolling();
     poll.current = setInterval(() => {
-      const native = NativeSession.state();
-      setPhase(phaseFromState(native));
+      if (NativeSession === null) return;
+      setPhase(phaseFromState(NativeSession.state()));
       readResult();
     }, POLL_INTERVAL_MS);
   }, [readResult, stopPolling]);
@@ -129,7 +157,7 @@ export function useTranslator() {
 
   const speak = useCallback(
     (text: string, language: Language) => {
-      if (!ttsEnabled || text.length === 0) return;
+      if (!ttsEnabled || text.length === 0 || NativeSession === null) return;
       try {
         NativeSession.speak(text, speechTag(language));
       } catch {
@@ -140,12 +168,8 @@ export function useTranslator() {
   );
 
   const beginVoice = useCallback(async () => {
-    if (busy.current) return;
+    if (busy.current || NativeSession === null) return;
     setError(null);
-    if (load !== 'ready') {
-      setError('Models are not loaded yet.');
-      return;
-    }
     if (!canSpeakIn(from)) {
       setError('This language has no speech recognition. Type instead.');
       return;
@@ -154,6 +178,15 @@ export function useTranslator() {
       setError('Microphone permission is required to translate speech.');
       return;
     }
+    if (!(await ensureModels())) {
+      setError('Models could not be loaded.');
+      return;
+    }
+    if (!configure(from, to, SPEECH_MODE)) {
+      setError(errorForStatus(SESSION_STATUS.unsupportedPair));
+      return;
+    }
+
     const ticket = ++turn.current;
     try {
       if (!NativeSession.startVoice()) {
@@ -176,7 +209,7 @@ export function useTranslator() {
     setTranslation('');
     setPhase('recording');
     startPolling();
-  }, [configure, from, load, startPolling, to]);
+  }, [configure, ensureModels, from, startPolling, to]);
 
   const finishVoice = useCallback(async () => {
     if (!busy.current) {
@@ -186,6 +219,7 @@ export function useTranslator() {
     turn.current += 1;
     busy.current = false;
     stopPolling();
+    if (NativeSession === null) return;
     try {
       const status = await NativeSession.stopVoice();
       readResult();
@@ -203,9 +237,9 @@ export function useTranslator() {
 
   const translateTyped = useCallback(
     async (text: string) => {
-      if (busy.current) return;
-      if (load !== 'ready') {
-        setError('Models are not loaded yet.');
+      if (busy.current || NativeSession === null) return;
+      if (!(await ensureModels())) {
+        setError('Models could not be loaded.');
         return;
       }
       if (!configure(from, to, TEXT_MODE)) {
@@ -231,15 +265,17 @@ export function useTranslator() {
         setPhase('idle');
       }
     },
-    [configure, from, load, readResult, speak, to],
+    [configure, ensureModels, from, readResult, speak, to],
   );
 
   const cancel = useCallback(() => {
     turn.current += 1;
-    try {
-      NativeSession.cancel();
-    } catch {
-      // Nothing to cancel.
+    if (NativeSession !== null) {
+      try {
+        NativeSession.cancel();
+      } catch {
+        // Nothing to cancel.
+      }
     }
     busy.current = false;
     stopPolling();
@@ -284,7 +320,7 @@ export function useTranslator() {
     swap,
     chooseFrom,
     chooseTo,
-    retryOpen: open,
+    retryOpen: ensureModels,
     refreshModels,
   };
 }

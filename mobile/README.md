@@ -49,7 +49,7 @@ turns `models/nllb/tokenizer.json` into `models/nllb_bpe.bin`.
 
 ```bash
 cd mobile/android
-./gradlew assembleRelease          # 73 MB APK, bundled JS, debug keystore
+./gradlew assembleRelease          # arm64 (reactNativeArchitectures), bundled JS
 adb install -r app/build/outputs/apk/release/app-release.apk
 
 # models: ~1.4 GB over USB
@@ -63,6 +63,13 @@ Open the app: the dot next to the title turns green when the models load.
 The release build is signed with the template's debug keystore so it can be
 sideloaded. Generate a real keystore before distributing it to anyone else;
 nothing in the app needs a Play Store upload.
+
+Emulator build (release, bundled JS, no Metro):
+
+```bash
+cd mobile/android
+./gradlew assembleRelease -PreactNativeArchitectures=x86_64
+```
 
 Development build with Metro:
 
@@ -93,11 +100,15 @@ The C++ side keeps its own suite at the repository root (`ctest`).
 | `src/data/languages.json` | generated catalog (202 languages, capabilities) |
 | `src/native/NativeXtransSession.ts` | TurboModule spec (codegen) |
 | `android/app/src/main/cpp/jni_bridge.cpp` | JNI, model loading, snapshots |
+| `android/app/src/main/jni/CMakeLists.txt` | RN's app project + our library (must include RN's CMake) |
 | `android/app/src/main/cpp/CMakeLists.txt` | core + whisper.cpp + ONNX Runtime |
 | `android/.../XtransModule.kt` | capture, worker thread, OS TTS |
 
 ## Design notes
 
+- **RN's CMake stays the top-level project.** `libappmodules.so` installs the
+  Java TurboModule provider; replacing `externalNativeBuild` with a plain
+  library makes every core module unreachable and the app exits at startup.
 - **No PCM on the bridge.** `startVoice`/`stopVoice` capture and hand samples
   straight to C++; JS only sees text.
 - **Polling, not events.** Sync getters read a mutex-guarded snapshot, so a

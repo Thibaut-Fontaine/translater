@@ -11,6 +11,7 @@ export const colors = {
   accentDim: '#1d4d63',
   danger: '#ff6b6b',
   ok: '#5bd67a',
+  warning: '#f0b429',
   recording: '#ff5a5f',
 };
 

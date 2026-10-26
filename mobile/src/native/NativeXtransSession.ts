@@ -38,4 +38,11 @@ export interface Spec extends TurboModule {
   stopSpeaking(): void;
 }
 
-export default TurboModuleRegistry.getEnforcing<Spec>('XtransSession');
+// `get`, not `getEnforcing`: a module that failed to register must become a
+// visible error, not an exception thrown while the bundle is still evaluating
+// (which is an instant exit on a release build).
+const NativeSession: Spec | null = TurboModuleRegistry.get<Spec>('XtransSession') ?? null;
+
+export const nativeModuleAvailable = NativeSession !== null;
+
+export default NativeSession;

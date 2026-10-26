@@ -1,4 +1,6 @@
-import raw from './languages.json';
+// Explicit name: a sibling `languages.json` would shadow this module, because
+// Metro resolves `.json` before `.ts` for an extensionless import.
+import raw from './catalog.json';
 
 export type Language = {
   /** Index into the C++ enum; what the native module expects. */

@@ -16,7 +16,7 @@ class XtransPackage : BaseReactPackage() {
         XtransModule.NAME to
           ReactModuleInfo(
             name = XtransModule.NAME,
-            className = XtransModule.NAME,
+            className = XtransModule::class.java.name,
             canOverrideExistingModule = false,
             needsEagerInit = false,
             isCxxModule = false,
