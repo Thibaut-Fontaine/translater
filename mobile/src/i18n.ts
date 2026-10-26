@@ -47,6 +47,8 @@ const en = {
   modelsNotInstalled: 'Models are not installed. Open the Models tab to download them.',
   notEnoughMemory:
     'Not enough free memory to load the models. Close other apps and try again.',
+  engineNotReady:
+    'The translation engine is not ready. Try again, or reopen the app.',
 
   modelsFolder: 'Models folder',
   retry: 'Reload models',
@@ -134,6 +136,8 @@ const fr: typeof en = {
     "Les modèles ne sont pas installés. Ouvrez l'onglet Modèles pour les télécharger.",
   notEnoughMemory:
     "Mémoire libre insuffisante pour charger les modèles. Fermez d'autres applications et réessayez.",
+  engineNotReady:
+    "Le moteur de traduction n'est pas prêt. Réessayez ou rouvrez l'application.",
 
   modelsFolder: 'Dossier des modèles',
   retry: 'Recharger',
@@ -196,6 +200,7 @@ const errorKeys: Record<string, StringKey> = {
   'Microphone permission is required to translate speech.': 'micDenied',
   'Models are not installed.': 'modelsNotInstalled',
   'Not enough free memory (need about 800 MB).': 'notEnoughMemory',
+  'Translation engine is not ready.': 'engineNotReady',
 };
 
 export function errorKey(message: string | null): StringKey {
