@@ -111,7 +111,9 @@ On a 2 GB emulator this now reaches *Translating…* where 0.2.0 was killed at
 load; the emulator host ran out of memory during inference, so a full
 translation on constrained hardware is still unverified.
 
-0.2.2 also recovers a turn left open by a lost button release (the first press
+0.2.3 asks for the microphone once at launch (it is the only runtime
+permission), so the dialog can no longer swallow a press-out; a refusal leaves
+text mode fully usable and shows a hint. 0.2.2 also recovers a turn left open by a lost button release (the first press
 opens the microphone permission dialog, which can swallow the press-out). The
 stuck turn made every later `configure` fail, and the UI reported it as
 "this pair cannot be translated". A stray release now cancels the native turn,

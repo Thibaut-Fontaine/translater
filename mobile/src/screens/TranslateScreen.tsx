@@ -33,6 +33,7 @@ export function TranslateScreen({
     translation,
     error,
     load,
+    micPermission,
     draft,
     setDraft,
     beginVoice,
@@ -147,7 +148,7 @@ export function TranslateScreen({
         ) : (
           <TalkButton
             phase={phase}
-            disabled={!ready || !canVoice}
+            disabled={!ready || !canVoice || micPermission === 'denied'}
             locale={locale}
             onStart={beginVoice}
             onStop={finishVoice}
@@ -179,6 +180,11 @@ export function TranslateScreen({
         {!canVoice ? (
           <Text style={[styles.subtitle, {textAlign: 'center'}]}>
             {t(locale, 'speechUnavailable')}
+          </Text>
+        ) : null}
+        {micPermission === 'denied' ? (
+          <Text style={[styles.subtitle, {textAlign: 'center', color: colors.warning}]}>
+            {t(locale, 'micDeniedHint')}
           </Text>
         ) : null}
       </View>
