@@ -53,6 +53,9 @@ const en = {
   sttFailed: 'Speech recognition failed.',
   mtFailed: 'Translation failed.',
   unknownError: 'Unknown error.',
+  nativeMissing: 'Native module missing',
+  nativeMissingHint:
+    'The XtransSession module did not register in this build. Reinstall a complete APK; the app cannot translate without it.',
   copied: 'Copied',
   copy: 'Copy',
   speakAgain: 'Speak again',
@@ -117,6 +120,9 @@ const fr: typeof en = {
   sttFailed: 'La reconnaissance a échoué.',
   mtFailed: 'La traduction a échoué.',
   unknownError: 'Erreur inconnue.',
+  nativeMissing: 'Module natif absent',
+  nativeMissingHint:
+    "Le module XtransSession ne s'est pas enregistré dans cette version. Réinstallez une APK complète ; sans lui, l'application ne peut pas traduire.",
   copied: 'Copié',
   copy: 'Copier',
   speakAgain: 'Réécouter',

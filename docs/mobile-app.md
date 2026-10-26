@@ -48,6 +48,48 @@ Still true, and blocking:
 
 ---
 
+## 0.1 Startup crash fixes (2026-10-26)
+
+The first published APK closed instantly on a phone. Reproduced in a release
+build on an Android 35 x86_64 emulator, where `adb logcat` gave the real cause:
+`TurboModuleRegistry.getEnforcing('PlatformConstants') could not be found`,
+followed by an uncaught JS exception and `SIGABRT`. Two independent bugs:
+
+1. **`libappmodules.so` was never built.** RN 0.88 puts the Java TurboModule
+   provider in that library's `JNI_OnLoad`
+   (`DefaultTurboModuleManagerDelegate::javaModuleProvider`). Our
+   `android/app/build.gradle` replaced `externalNativeBuild` with a CMake file
+   that only built `libxtrans.so`, so RN's default project — and therefore
+   every core module — disappeared. The app now keeps RN's project in
+   `android/app/src/main/jni/CMakeLists.txt`, includes
+   `ReactNative-application.cmake`, and adds our sources as a subdirectory.
+   **Never point `externalNativeBuild` at a CMake file that does not include
+   RN's application CMake.**
+2. **`src/data/languages.json` shadowed `src/data/languages.ts`.** Metro tries
+   `.json` before `.ts` for an extensionless import, so the app imported the
+   raw catalog (no `LANGUAGES`, no `canSpeakIn`) while Jest, with its own
+   resolver, tested the TypeScript module and stayed green. The generated file
+   is now `src/data/catalog.json`.
+
+Also fixed in the same pass:
+
+- **Models load on first use, not at launch.** Allocating three ONNX sessions
+  before the first frame is a plausible low-memory kill on a phone; startup now
+  only checks file presence. A failed load shows an error and can be retried.
+- `TurboModuleRegistry.get` instead of `getEnforcing`: a missing module is a
+  visible banner, not an exception during bundle evaluation.
+- Safe areas (`react-native-safe-area-context`), text mode reachable with a
+  full-width Translate button, error banner above the fold.
+
+Tests: 16 Jest (startup does not open models, missing module renders, first use
+opens once, failure is reported, text mode reaches the module), 137 C++.
+
+Verified on the emulator (release build): the app starts, the native module
+answers, text mode reaches `translate()`, and a missing models directory is
+reported instead of crashing. Not yet re-verified on the phone.
+
+---
+
 ## 1. Goal
 
 Bring the same offline translator to phones, sharing the C++ core, and use the

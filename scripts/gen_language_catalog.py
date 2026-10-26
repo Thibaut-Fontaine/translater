@@ -10,7 +10,7 @@ Inputs
 Outputs (all committed, so the build stays offline)
   include/xtrans/lang_generated.inc   enum Lang enumerators
   src/lang_table_generated.inc        LangInfo rows + per-mode selections
-  mobile/src/data/languages.json      the app's language list
+  mobile/src/data/catalog.json      the app's language list
 
 Why generate
   NLLB-200 has 205 language codes and their token ids live in the tokenizer's
@@ -223,7 +223,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--tokenizer", default=str(ROOT / "models/nllb/tokenizer.json"))
     ap.add_argument("--matrix", default=str(ROOT / "docs/language-matrix.md"))
-    ap.add_argument("--json", default=str(ROOT / "mobile/src/data/languages.json"))
+    ap.add_argument("--json", default=str(ROOT / "mobile/src/data/catalog.json"))
     args = ap.parse_args()
 
     tokenizer = Path(args.tokenizer)

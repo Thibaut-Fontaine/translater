@@ -42,7 +42,7 @@ export function TranslateScreen({
     swap,
   } = translator;
 
-  const ready = load === 'ready';
+  const ready = load === 'ready' || load === 'idle';
   const busy = phase !== 'idle';
   const canVoice = canSpeakIn(from);
 
@@ -67,10 +67,38 @@ export function TranslateScreen({
         <LanguageButton language={to} onPress={() => onPick('to')} label={t(locale, 'target')} />
       </View>
 
+      {error !== null ? (
+        <Text style={[styles.error, {marginBottom: spacing.s}]}>{describeError(error, locale)}</Text>
+      ) : null}
+
       <ScrollView
         style={{flex: 1}}
         contentContainerStyle={{paddingBottom: spacing.m}}
         keyboardShouldPersistTaps="handled">
+        {typing ? (
+          <View style={{marginBottom: spacing.m}}>
+            <TextInput
+              value={draft}
+              onChangeText={setDraft}
+              placeholder={t(locale, 'typePlaceholder')}
+              placeholderTextColor={colors.muted}
+              multiline
+              autoCorrect={false}
+              style={{
+                backgroundColor: colors.surfaceAlt,
+                borderColor: colors.border,
+                borderWidth: 1,
+                borderRadius: 12,
+                color: colors.text,
+                fontSize: 18,
+                minHeight: 88,
+                padding: spacing.m,
+                textAlignVertical: 'top',
+              }}
+            />
+          </View>
+        ) : null}
+
         <View style={[styles.card, {marginBottom: spacing.m}]}>
           <Text style={styles.label}>{t(locale, 'transcript')}</Text>
           <Text style={styles.body} selectable>
@@ -94,54 +122,27 @@ export function TranslateScreen({
           </Text>
         </View>
 
-        {typing ? (
-          <View style={{marginTop: spacing.m}}>
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              placeholder={t(locale, 'typePlaceholder')}
-              placeholderTextColor={colors.muted}
-              multiline
-              autoCorrect={false}
-              style={{
-                backgroundColor: colors.surfaceAlt,
-                borderColor: colors.border,
-                borderWidth: 1,
-                borderRadius: 12,
-                color: colors.text,
-                fontSize: 18,
-                minHeight: 88,
-                padding: spacing.m,
-                textAlignVertical: 'top',
-              }}
-            />
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => translateTyped(draft)}
-              disabled={busy || draft.trim().length === 0}
-              style={[
-                styles.button,
-                {marginTop: spacing.s, opacity: busy || draft.trim().length === 0 ? 0.5 : 1},
-              ]}>
-              <Text style={styles.buttonText}>{t(locale, 'translate')}</Text>
-            </Pressable>
-          </View>
-        ) : null}
-
-        {error !== null ? (
-          <Text style={[styles.error, {marginTop: spacing.m}]}>{describeError(error, locale)}</Text>
-        ) : null}
       </ScrollView>
 
       <View style={{paddingBottom: spacing.l, paddingTop: spacing.s}}>
+        {load === 'loading' ? (
+          <Text style={[styles.subtitle, {textAlign: 'center', marginBottom: spacing.s}]}>
+            {t(locale, 'loadingModels')}
+          </Text>
+        ) : null}
         <StatusLine phase={phase} locale={locale} />
         <View style={{height: spacing.m}} />
         {typing ? (
           <Pressable
             accessibilityRole="button"
-            onPress={() => setTyping(false)}
-            style={[styles.button, {backgroundColor: colors.surface}]}>
-            <Text style={styles.buttonText}>{t(locale, 'showVoice')}</Text>
+            accessibilityLabel={t(locale, 'translate')}
+            onPress={() => translateTyped(draft)}
+            disabled={busy || draft.trim().length === 0}
+            style={[
+              styles.button,
+              {paddingVertical: spacing.m, opacity: busy || draft.trim().length === 0 ? 0.5 : 1},
+            ]}>
+            <Text style={styles.buttonText}>{t(locale, 'translate')}</Text>
           </Pressable>
         ) : (
           <TalkButton
@@ -159,13 +160,18 @@ export function TranslateScreen({
               setTyping(v => !v);
             }}
             style={styles.ghost}
-            accessibilityRole="button">
+            accessibilityRole="button"
+            accessibilityLabel={typing ? t(locale, 'showVoice') : t(locale, 'showText')}>
             <Text style={styles.ghostText}>
               {typing ? t(locale, 'showVoice') : t(locale, 'showText')}
             </Text>
           </Pressable>
           {busy ? (
-            <Pressable onPress={cancel} style={styles.ghost} accessibilityRole="button">
+            <Pressable
+              onPress={cancel}
+              style={styles.ghost}
+              accessibilityRole="button"
+              accessibilityLabel={t(locale, 'cancel')}>
               <Text style={[styles.ghostText, {color: colors.danger}]}>{t(locale, 'cancel')}</Text>
             </Pressable>
           ) : null}

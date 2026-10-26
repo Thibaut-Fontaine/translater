@@ -1,5 +1,6 @@
 import React, {useState} from 'react';
-import {Pressable, SafeAreaView, StatusBar, Text, View} from 'react-native';
+import {Pressable, StatusBar, Text, View} from 'react-native';
+import {SafeAreaProvider, SafeAreaView} from 'react-native-safe-area-context';
 
 import NativeSession from './native/NativeXtransSession';
 import {Locale, t} from './i18n';
@@ -19,7 +20,8 @@ export default function App() {
   const [picking, setPicking] = useState<'from' | 'to' | null>(null);
 
   return (
-    <SafeAreaView style={{flex: 1, backgroundColor: colors.bg}}>
+    <SafeAreaProvider>
+    <SafeAreaView style={{flex: 1, backgroundColor: colors.bg}} edges={['top', 'bottom']}>
      <StatusBar barStyle="light-content" />
       <View style={{flex: 1, paddingHorizontal: spacing.m}}>
         <View style={[styles.row, {paddingTop: spacing.s}]}>
@@ -32,10 +34,26 @@ export default function App() {
               width: 8,
               height: 8,
               borderRadius: 4,
-              backgroundColor: translator.load === 'ready' ? colors.ok : colors.danger,
+              backgroundColor:
+                translator.load === 'ready'
+                  ? colors.ok
+                  : translator.load === 'unavailable' || translator.load === 'failed'
+                    ? colors.danger
+                    : colors.warning,
             }}
           />
         </View>
+
+        {translator.load === 'unavailable' ? (
+          <View style={[styles.card, {borderColor: colors.danger, marginBottom: spacing.s}]}>
+            <Text style={[styles.body, {color: colors.danger, fontSize: 15}]}>
+              {t(locale, 'nativeMissing')}
+            </Text>
+            <Text style={[styles.subtitle, {marginTop: spacing.xs}]}>
+              {t(locale, 'nativeMissingHint')}
+            </Text>
+          </View>
+        ) : null}
 
         {tab === 'translate' ? (
           <TranslateScreen
@@ -105,10 +123,12 @@ export default function App() {
         onClose={() => setPicking(null)}
       />
     </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
 function safeModelsDir(): string {
+  if (NativeSession === null) return 'models';
   try {
     return NativeSession.modelsDir();
   } catch {

@@ -273,6 +273,15 @@ adapters            ALSA, libgpiod, whisper.cpp, ONNX Runtime, Piper
 ### Phone
 
 - `mobile/` shares `src/` and `include/xtrans/`; do not fork the core.
+- **Android: `externalNativeBuild` must point at `src/main/jni/CMakeLists.txt`,
+  which includes RN's `ReactNative-application.cmake`.** That builds
+  `libappmodules.so`, whose `JNI_OnLoad` installs the Java TurboModule
+  provider. A CMake file that only builds our library makes every RN module
+  (`PlatformConstants`, `ExceptionsManager`) disappear and the app aborts at
+  startup. Emulator: `-PreactNativeArchitectures=x86_64`.
+- **Never give a TS module the same basename as a sibling JSON file.** Metro
+  picks `.json` before `.ts`; Jest picks `.ts`, so tests pass and the app
+  crashes. The catalog is `src/data/catalog.json`, imported explicitly.
 - Android: `scripts/fetch_ort_android.sh` unpacks the pinned ONNX Runtime AAR
   into gitignored paths; `mobile/android/app/src/main/cpp/CMakeLists.txt` lists
   the core sources (no ALSA, GPIO, Piper or `ort_delay_load`).
