@@ -222,6 +222,7 @@ function describeError(message: string, locale: Locale): string {
     'Microphone permission is required to translate speech.': 'micDenied',
     'Models are not installed.': 'modelsNotInstalled',
     'Not enough free memory (need about 800 MB).': 'notEnoughMemory',
+    'Translation engine is not ready.': 'engineNotReady',
   };
   const key = map[message];
   return key !== undefined ? t(locale, key) : message;

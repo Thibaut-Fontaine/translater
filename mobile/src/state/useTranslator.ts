@@ -126,8 +126,15 @@ export function useTranslator() {
   const configure = useCallback((a: Language, b: Language, mode: number): boolean => {
     if (NativeSession === null) return false;
     if (!canTranslate(a, b)) return false;
-    // The core refuses while a turn is open; that is not an error worth
-    // showing when the user simply changed a language mid-recording.
+    if (NativeSession.configure(a.value, b.value, mode)) return true;
+    // The core refuses while a turn is open. A press whose release was lost
+    // (the permission dialog steals focus) leaves exactly that: clear it and
+    // try once more instead of telling the user the pair is impossible.
+    try {
+      NativeSession.cancel();
+    } catch {
+      // Nothing to clear.
+    }
     return NativeSession.configure(a.value, b.value, mode);
   }, []);
 
@@ -229,7 +236,11 @@ export function useTranslator() {
       return;
     }
     if (!configure(from, to, SPEECH_MODE)) {
-      setError(errorForStatus(SESSION_STATUS.unsupportedPair));
+      setError(
+        canTranslate(from, to)
+          ? 'Translation engine is not ready.'
+          : errorForStatus(SESSION_STATUS.unsupportedPair),
+      );
       return;
     }
 
@@ -259,7 +270,16 @@ export function useTranslator() {
 
   const finishVoice = useCallback(async () => {
     if (!busy.current) {
+      // The start may have completed after the button was released (a
+      // permission dialog in between). Make sure the native turn is closed.
       turn.current += 1;
+      if (NativeSession !== null) {
+        try {
+          NativeSession.cancel();
+        } catch {
+          // Already idle.
+        }
+      }
       return;
     }
     turn.current += 1;
@@ -289,7 +309,11 @@ export function useTranslator() {
         return;
       }
       if (!configure(from, to, TEXT_MODE)) {
-        setError(errorForStatus(SESSION_STATUS.unsupportedPair));
+        setError(
+          canTranslate(from, to)
+            ? 'Translation engine is not ready.'
+            : errorForStatus(SESSION_STATUS.unsupportedPair),
+        );
         return;
       }
 
